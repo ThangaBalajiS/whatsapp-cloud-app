@@ -13,21 +13,22 @@ When you connect a phone number to WhatsApp Cloud API, you lose access to the re
 This app gives you:
 - **Webhook endpoint** — Add it to your Meta dashboard and start receiving messages instantly
 - **Message inbox** — View all incoming messages in a clean dashboard
-- **Send messages** — Reply manually or automate responses via flows
+- **Send messages** — Reply manually or automate responses via flows (coming soon)
 - **Free & self-hostable** — No subscriptions, no vendor lock-in
 
 ## Features
 
-- User authentication (Signup/Signin)
-- Protected dashboard
-- MongoDB for message & session persistence
-- Secure password hashing with bcryptjs
-- JWT-based sessions
+- Multi-user support with authentication
+- Encrypted storage for WhatsApp API tokens
+- Real-time message inbox with conversation threads
+- Send text replies directly from the dashboard
+- Auto-generated webhook verify tokens
+- Read receipts and message status tracking
 
 ## Prerequisites
 
-- Node.js
-- MongoDB running locally on `mongodb://localhost:27017` (or configure `MONGODB_URI`)
+- Node.js 18+
+- MongoDB running locally or a MongoDB Atlas connection string
 
 ## Getting Started
 
@@ -36,10 +37,11 @@ This app gives you:
 npm install
 ```
 
-2. Create a `.env.local` file (optional, defaults provided for local dev):
+2. Create a `.env.local` file:
 ```env
 MONGODB_URI=mongodb://localhost:27017/whatsapp-cloud-app
-JWT_SECRET_KEY=your-secret-key
+JWT_SECRET_KEY=your-jwt-secret-key-change-this
+ENCRYPTION_KEY=your-encryption-key-for-api-tokens
 ```
 
 3. Run the development server:
@@ -48,6 +50,24 @@ npm run dev
 ```
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Setup Guide
+
+1. **Create an account** — Sign up with your email and password
+2. **Configure WhatsApp** — Go to Settings and enter your WhatsApp Cloud API credentials:
+   - Phone Number ID
+   - Business Account ID
+   - Access Token (permanent or temporary)
+3. **Set up webhook** — Copy the webhook URL and verify token from Settings, then add them to your [Meta Developer Dashboard](https://developers.facebook.com/)
+4. **Start messaging** — Once the webhook is verified, incoming messages will appear in your inbox
+
+## Tech Stack
+
+- Next.js 14 (App Router)
+- MongoDB with Mongoose
+- JWT for sessions
+- AES-256-GCM encryption for API tokens
+- bcryptjs for password hashing
 
 ## License
 

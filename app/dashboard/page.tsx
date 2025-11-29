@@ -1,8 +1,9 @@
-import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { LogoutButton } from '../../components/LogoutButton';
 import { getUserFromSession } from '../../lib/auth';
+import dbConnect from '../../lib/mongodb';
+import WhatsAppAccount from '../../models/WhatsAppAccount';
+import InboxClient from '../../components/InboxClient';
 
 export default async function DashboardPage() {
   const cookieStore = cookies();
@@ -13,21 +14,14 @@ export default async function DashboardPage() {
     redirect('/');
   }
 
+  await dbConnect();
+  const account = await WhatsAppAccount.findOne({ userId: user.id }).lean();
+
   return (
-    <main className="container">
-      <header>
-        <h1>Dashboard</h1>
-        <p className="lead">Signed in as {user.email}</p>
-      </header>
-
-      <div className="card">
-        <div className="status">You are authenticated. This page is protected.</div>
-
-        <div className="link-row">
-          <Link href="/">Back to login</Link>
-          <LogoutButton />
-        </div>
-      </div>
-    </main>
+    <InboxClient
+      userEmail={user.email}
+      userId={user.id}
+      hasWhatsAppAccount={!!account}
+    />
   );
 }
