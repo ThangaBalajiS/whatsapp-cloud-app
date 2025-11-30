@@ -81,7 +81,7 @@ export default function HomePage() {
         </form>
 
         <div className="link-row">
-          <span>Don't have an account?</span>
+          <span>Don&apos;t have an account?</span>
           <Link href="/signup" className="small-btn">
             Sign up
           </Link>
