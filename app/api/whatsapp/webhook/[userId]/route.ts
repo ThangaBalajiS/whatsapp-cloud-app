@@ -63,6 +63,7 @@ export async function POST(
     const account = await WhatsAppAccount.findOne({ userId: params.userId });
 
     if (!account) {
+      // Still return 200 to prevent Meta from retrying
       return NextResponse.json({ message: 'OK' }, { status: 200 });
     }
 
@@ -212,6 +213,7 @@ export async function POST(
     return NextResponse.json({ message: 'OK' }, { status: 200 });
   } catch (error: any) {
     console.error('Webhook error:', error);
+    // Always return 200 to prevent Meta from retrying
     return NextResponse.json({ message: 'OK' }, { status: 200 });
   }
 }

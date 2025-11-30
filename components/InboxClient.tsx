@@ -35,7 +35,6 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [showContactsPopover, setShowContactsPopover] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const selectedContactRef = useRef<Contact | null>(null);
 
@@ -157,7 +156,6 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
 
   const selectContact = (contact: Contact) => {
     setSelectedContact(contact);
-    setShowContactsPopover(false);
     fetchMessages(contact._id);
   };
 
@@ -215,8 +213,6 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
     return date.toLocaleDateString();
   };
 
-  const totalUnread = contacts.reduce((sum, c) => sum + c.unreadCount, 0);
-
   if (!hasWhatsAppAccount) {
     return (
       <main className="dashboard-container">
@@ -260,8 +256,8 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
       </header>
 
       <div className="inbox-layout">
-        {/* Contacts sidebar - desktop only */}
-        <div className="contacts-sidebar desktop-only">
+        {/* Contacts sidebar */}
+        <div className="contacts-sidebar">
           <div className="contacts-header">
             <h2>Conversations</h2>
           </div>
@@ -362,73 +358,6 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
           )}
         </div>
       </div>
-
-      {/* Mobile floating contacts button */}
-      <button 
-        className="floating-contacts-btn mobile-only"
-        onClick={() => setShowContactsPopover(!showContactsPopover)}
-        aria-label="Open contacts"
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-          <circle cx="9" cy="7" r="4"></circle>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-        </svg>
-        {totalUnread > 0 && (
-          <span className="floating-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>
-        )}
-      </button>
-
-      {/* Mobile contacts popover */}
-      {showContactsPopover && (
-        <>
-          <div 
-            className="popover-overlay mobile-only" 
-            onClick={() => setShowContactsPopover(false)}
-          />
-          <div className="contacts-popover mobile-only">
-            <div className="popover-header">
-              <h3>Conversations</h3>
-              <button 
-                className="popover-close"
-                onClick={() => setShowContactsPopover(false)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            {loading ? (
-              <div className="loading-contacts">Loading...</div>
-            ) : contacts.length === 0 ? (
-              <div className="no-contacts">
-                <p>No conversations yet</p>
-              </div>
-            ) : (
-              <div className="popover-contacts-list">
-                {contacts.map((contact) => (
-                  <div
-                    key={contact._id}
-                    className={`contact-item ${selectedContact?._id === contact._id ? 'active' : ''}`}
-                    onClick={() => selectContact(contact)}
-                  >
-                    <div className="contact-avatar">
-                      {contact.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="contact-info">
-                      <div className="contact-name">{contact.name}</div>
-                      <div className="contact-phone">{contact.phoneNumber}</div>
-                    </div>
-                    {contact.unreadCount > 0 && (
-                      <div className="unread-badge">{contact.unreadCount}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
     </main>
   );
 }
