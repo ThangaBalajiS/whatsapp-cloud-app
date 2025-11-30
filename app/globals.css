@@ -16,7 +16,9 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: radial-gradient(circle at 20% 20%, #1a2444, #0b1021 45%),
     radial-gradient(circle at 80% 0%, #11204f, transparent 40%),
@@ -197,9 +199,11 @@ button:disabled {
 .dashboard-container {
   width: 100%;
   max-width: 1200px;
-  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .dashboard-header {
@@ -209,6 +213,7 @@ button:disabled {
   margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .header-actions {
@@ -305,6 +310,7 @@ button:disabled {
   gap: 24px;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .contacts-sidebar {
@@ -314,11 +320,13 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .contacts-header {
   padding: 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 
 .contacts-header h2 {
@@ -414,6 +422,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
 }
 
 .messages-header {
@@ -422,6 +431,7 @@ button:disabled {
   gap: 12px;
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 
 .messages-header .contact-avatar {
@@ -437,6 +447,11 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.messages-list > div {
+  display: flex;
+  flex-direction: column;
 }
 
 .date-divider {
@@ -493,6 +508,7 @@ button:disabled {
   padding: 16px 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   flex-direction: row;
+  flex-shrink: 0;
 }
 
 .message-input input {
@@ -567,14 +583,147 @@ button:disabled {
   color: var(--muted);
 }
 
+/* Mobile floating contacts button */
+.mobile-contacts-fab {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  border: none;
+  color: #0b1021;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(91, 157, 255, 0.4);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mobile-contacts-fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px rgba(91, 157, 255, 0.5);
+}
+
+.mobile-contacts-fab:active {
+  transform: scale(0.95);
+}
+
+.fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  background: var(--danger);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+/* Mobile contacts popover */
+.mobile-contacts-popover {
+  display: none;
+  position: fixed;
+  bottom: 96px;
+  right: 24px;
+  width: calc(100vw - 48px);
+  max-width: 340px;
+  max-height: 60vh;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  z-index: 99;
+  overflow: hidden;
+  animation: popoverSlideIn 0.2s ease-out;
+}
+
+@keyframes popoverSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.popover-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.popover-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.popover-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.popover-contacts-list {
+  max-height: calc(60vh - 64px);
+  overflow-y: auto;
+}
+
+.popover-contacts-list .contact-item {
+  padding: 14px 20px;
+}
+
+.popover-contacts-list .contact-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .inbox-layout {
     grid-template-columns: 1fr;
+    position: relative;
   }
 
   .contacts-sidebar {
-    max-height: 300px;
+    display: none;
+  }
+
+  .mobile-contacts-fab {
+    display: flex;
+  }
+
+  .mobile-contacts-popover {
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -587,8 +736,27 @@ button:disabled {
     font-size: 24px;
   }
 
+  .dashboard-container {
+    height: calc(100vh - 32px);
+    max-height: calc(100vh - 32px);
+  }
+
   .dashboard-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .mobile-contacts-fab {
+    bottom: 20px;
+    right: 20px;
+    width: 52px;
+    height: 52px;
+  }
+
+  .mobile-contacts-popover {
+    right: 16px;
+    bottom: 88px;
+    width: calc(100vw - 32px);
+    max-height: 55vh;
   }
 }
