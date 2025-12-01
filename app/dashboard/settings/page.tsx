@@ -141,8 +141,78 @@ export default function SettingsPage() {
       </header>
 
       <div className="settings-grid">
+        {/* Webhook Configuration - For receiving messages */}
+        {userId && (
+          <div className="card">
+            <div className="card-header-with-status">
+              <h2>Webhook Configuration</h2>
+              {account && (
+                <span 
+                  className={`status-indicator ${account.isConnected ? 'connected' : 'disconnected'}`}
+                  title={account.isConnected ? 'Webhook connected' : 'Webhook not connected'}
+                >
+                  <span className="status-dot"></span>
+                  {account.isConnected ? 'Connected' : 'Not connected'}
+                </span>
+              )}
+            </div>
+            <p className="help-text" style={{ marginBottom: '16px' }}>
+              <strong>For receiving messages only.</strong> Configure this webhook in your Meta Developer Dashboard 
+              to receive incoming WhatsApp messages. No access token required — perfect if you only want to 
+              collect messages without sending replies from this platform.
+            </p>
+
+            <label>
+              Webhook URL
+              <div className="copy-field">
+                <input
+                  type="text"
+                  value={getWebhookUrl()}
+                  readOnly
+                />
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => copyToClipboard(getWebhookUrl(), 'url')}
+                >
+                  {copiedField === 'url' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </label>
+
+            {account?.webhookVerifyToken ? (
+              <label>
+                Verify Token
+                <div className="copy-field">
+                  <input
+                    type="text"
+                    value={account.webhookVerifyToken}
+                    readOnly
+                  />
+                  <button
+                    type="button"
+                    className="copy-btn"
+                    onClick={() => copyToClipboard(account.webhookVerifyToken, 'token')}
+                  >
+                    {copiedField === 'token' ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </label>
+            ) : (
+              <p className="help-text" style={{ marginTop: '8px', opacity: 0.7 }}>
+                Save your API credentials below to generate a verify token.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* API Credentials - For sending messages */}
         <div className="card">
           <h2>API Credentials</h2>
+          <p className="help-text" style={{ marginBottom: '16px' }}>
+            <strong>For sending messages.</strong> Add your WhatsApp Cloud API credentials to send messages 
+            and replies directly from this platform. Required only if you want to respond to conversations here.
+          </p>
           <form onSubmit={handleSubmit}>
             <label>
               Phone Number ID
@@ -167,14 +237,16 @@ export default function SettingsPage() {
             </label>
 
             <label>
-              Access Token {account?.hasAccessToken && <span className="token-set">(already set)</span>}
+              Access Token (Optional) {account?.hasAccessToken && <span className="token-set">✓ configured</span>}
               <input
                 type="password"
                 value={accessToken}
                 onChange={(e) => setAccessToken(e.target.value)}
-                placeholder={account?.hasAccessToken ? 'Enter new token to update' : 'Enter your access token'}
-                required={!account?.hasAccessToken}
+                placeholder={account?.hasAccessToken ? 'Enter new token to update' : 'Leave empty if receive-only'}
               />
+              <span className="help-text">
+                Your permanent access token from Meta Developer Dashboard. Only needed if you want to send messages.
+              </span>
             </label>
 
             <button type="submit" disabled={saving}>
@@ -185,60 +257,6 @@ export default function SettingsPage() {
             {error && <div className="status error">{error}</div>}
           </form>
         </div>
-
-        {account && userId && (
-          <div className="card">
-            <div className="card-header-with-status">
-              <h2>Webhook Configuration</h2>
-              <span 
-                className={`status-indicator ${account.isConnected ? 'connected' : 'disconnected'}`}
-                title={account.isConnected ? 'Webhook connected' : 'Webhook not connected'}
-              >
-                <span className="status-dot"></span>
-                {account.isConnected ? 'Connected' : 'Not connected'}
-              </span>
-            </div>
-            <p className="help-text">
-              Add this webhook URL and verify token to your Meta Developer Dashboard to receive messages.
-            </p>
-
-            <label>
-              Webhook URL
-              <div className="copy-field">
-                <input
-                  type="text"
-                  value={getWebhookUrl()}
-                  readOnly
-                />
-                <button
-                  type="button"
-                  className="copy-btn"
-                  onClick={() => copyToClipboard(getWebhookUrl(), 'url')}
-                >
-                  {copiedField === 'url' ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-            </label>
-
-            <label>
-              Verify Token
-              <div className="copy-field">
-                <input
-                  type="text"
-                  value={account.webhookVerifyToken}
-                  readOnly
-                />
-                <button
-                  type="button"
-                  className="copy-btn"
-                  onClick={() => copyToClipboard(account.webhookVerifyToken, 'token')}
-                >
-                  {copiedField === 'token' ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-            </label>
-          </div>
-        )}
       </div>
     </main>
   );

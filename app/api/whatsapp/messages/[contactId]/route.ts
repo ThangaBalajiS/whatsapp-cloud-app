@@ -5,7 +5,7 @@ import Contact from '../../../../../models/Contact';
 import Message from '../../../../../models/Message';
 import { getUserFromSession } from '../../../../../lib/auth';
 
-// GET - Fetch messages for a contact
+// GET - Fetch messages for a contact with pagination
 export async function GET(
   request: Request,
   { params }: { params: { contactId: string } }
@@ -31,21 +31,44 @@ export async function GET(
       return NextResponse.json({ message: 'Contact not found' }, { status: 404 });
     }
 
-    // Fetch messages
-    const messages = await Message.find({ contactId: params.contactId })
-      .sort({ timestamp: 1 })
+    // Parse pagination params
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '10', 10);
+    const before = searchParams.get('before'); // Timestamp cursor for older messages
+
+    // Build query
+    const query: any = { contactId: params.contactId };
+    if (before) {
+      query.timestamp = { $lt: new Date(before) };
+    }
+
+    // Fetch messages (get newest first, then reverse for display order)
+    const messages = await Message.find(query)
+      .sort({ timestamp: -1 })
+      .limit(limit + 1) // Fetch one extra to check if there are more
       .lean();
 
-    // Mark messages as read and reset unread count
-    await Message.updateMany(
-      { contactId: params.contactId, direction: 'incoming', isRead: false },
-      { isRead: true }
-    );
+    // Check if there are more messages
+    const hasMore = messages.length > limit;
+    if (hasMore) {
+      messages.pop(); // Remove the extra message
+    }
 
-    contact.unreadCount = 0;
-    await contact.save();
+    // Reverse to get chronological order (oldest first)
+    messages.reverse();
 
-    return NextResponse.json({ contact, messages });
+    // Mark messages as read and reset unread count (only on initial load)
+    if (!before) {
+      await Message.updateMany(
+        { contactId: params.contactId, direction: 'incoming', isRead: false },
+        { isRead: true }
+      );
+
+      contact.unreadCount = 0;
+      await contact.save();
+    }
+
+    return NextResponse.json({ contact, messages, hasMore });
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }

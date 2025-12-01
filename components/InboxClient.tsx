@@ -36,9 +36,13 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showContactsPopover, setShowContactsPopover] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesListRef = useRef<HTMLDivElement>(null);
   const selectedContactRef = useRef<Contact | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const isInitialLoadRef = useRef(true);
 
   // Keep ref in sync with state for SSE handler
   useEffect(() => {
@@ -93,6 +97,8 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
           // If this message is for the currently selected contact, add it to messages
           if (selectedContactRef.current?._id === contact._id) {
             setMessages((prev) => [...prev, message]);
+            // Scroll to bottom for new incoming messages
+            setTimeout(() => scrollToBottom(), 100);
           }
         }
 
@@ -121,12 +127,66 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
     };
   }, [hasWhatsAppAccount]);
 
+  // Scroll to bottom only on initial load (not when loading older messages)
   useEffect(() => {
-    scrollToBottom();
+    if (isInitialLoadRef.current && messages.length > 0) {
+      scrollToBottomInstant();
+      isInitialLoadRef.current = false;
+    }
   }, [messages]);
+
+  const scrollToBottomInstant = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Handle scroll to load more messages
+  const handleMessagesScroll = () => {
+    const container = messagesListRef.current;
+    if (!container || loadingMoreMessages || !hasMoreMessages) return;
+
+    // Load more when scrolled near the top (within 50px)
+    if (container.scrollTop < 50) {
+      loadMoreMessages();
+    }
+  };
+
+  const loadMoreMessages = async () => {
+    if (!selectedContact || loadingMoreMessages || !hasMoreMessages || messages.length === 0) return;
+
+    setLoadingMoreMessages(true);
+    const container = messagesListRef.current;
+    const previousScrollHeight = container?.scrollHeight || 0;
+
+    try {
+      const oldestMessage = messages[0];
+      const res = await fetch(
+        `/api/whatsapp/messages/${selectedContact._id}?limit=10&before=${oldestMessage.timestamp}`
+      );
+      const data = await res.json();
+
+      if (data.messages && data.messages.length > 0) {
+        setMessages((prev) => [...data.messages, ...prev]);
+        setHasMoreMessages(data.hasMore);
+
+        // Maintain scroll position after prepending messages
+        requestAnimationFrame(() => {
+          if (container) {
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = newScrollHeight - previousScrollHeight;
+          }
+        });
+      } else {
+        setHasMoreMessages(false);
+      }
+    } catch (err) {
+      console.error('Failed to load more messages:', err);
+    } finally {
+      setLoadingMoreMessages(false);
+    }
   };
 
   const fetchContacts = async () => {
@@ -143,9 +203,11 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
 
   const fetchMessages = async (contactId: string) => {
     try {
-      const res = await fetch(`/api/whatsapp/messages/${contactId}`);
+      isInitialLoadRef.current = true;
+      const res = await fetch(`/api/whatsapp/messages/${contactId}?limit=10`);
       const data = await res.json();
       setMessages(data.messages || []);
+      setHasMoreMessages(data.hasMore || false);
       
       // Update contact in list to clear unread count
       setContacts(prev => prev.map(c => 
@@ -205,6 +267,8 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
           status: 'sent',
         }]);
         setNewMessage('');
+        // Scroll to bottom after sending
+        setTimeout(() => scrollToBottom(), 100);
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -326,7 +390,21 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
                 </div>
               </div>
 
-              <div className="messages-list">
+              <div 
+                className="messages-list" 
+                ref={messagesListRef}
+                onScroll={handleMessagesScroll}
+              >
+                {loadingMoreMessages && (
+                  <div className="loading-more-messages">
+                    <span>Loading older messages...</span>
+                  </div>
+                )}
+                {hasMoreMessages && !loadingMoreMessages && (
+                  <div className="load-more-hint">
+                    <span>Scroll up for older messages</span>
+                  </div>
+                )}
                 {messages.map((msg, idx) => {
                   const showDate = idx === 0 || 
                     formatDate(messages[idx - 1].timestamp) !== formatDate(msg.timestamp);
