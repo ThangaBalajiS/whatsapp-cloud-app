@@ -189,10 +189,11 @@ button:disabled {
   gap: 12px;
   position: relative;
   z-index: 1;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), transparent);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(17, 24, 48, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 24px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 
 /* Dashboard styles */
@@ -755,6 +756,7 @@ button:disabled {
 .builder-action-buttons {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ghost-btn {
@@ -764,10 +766,12 @@ button:disabled {
 
 .flow-builder {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
+  gap: 16px;
   flex: 1;
   min-height: 0;
+  align-items: start;
+  grid-auto-rows: minmax(0, 1fr);
 }
 
 .flow-column {
@@ -778,7 +782,10 @@ button:disabled {
 }
 
 .template-column {
-  overflow: hidden;
+  flex: 1;
+  overflow: auto;
+  gap: 16px;
+  height: 80vh;
 }
 
 .connections-column {
@@ -805,6 +812,9 @@ button:disabled {
   gap: 12px;
   overflow-y: auto;
   padding-right: 4px;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 6px;
 }
 
 .template-card-header {
@@ -895,6 +905,7 @@ button:disabled {
   gap: 10px;
   overflow-y: auto;
   padding-right: 4px;
+  min-height: 0;
 }
 
 .connection-card {
@@ -904,7 +915,12 @@ button:disabled {
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), transparent);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.connection-card.vertical {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .flow-node {
@@ -932,6 +948,71 @@ button:disabled {
 .flow-arrow {
   font-size: 18px;
   color: var(--muted);
+}
+
+.flow-arrow.vertical {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.small-input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(17, 24, 48, 0.8);
+  color: var(--text);
+  min-width: 200px;
+}
+
+.function-form,
+.function-test {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.function-form .form-row,
+.function-test .form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.function-form input,
+.function-form textarea,
+.function-form select,
+.function-test input,
+.function-test select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(17, 24, 48, 0.8);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.function-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.function-test pre {
+  margin: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.flow-column.card {
+  flex: 1;
+  min-height: 0;
 }
 
 .loading-templates,
