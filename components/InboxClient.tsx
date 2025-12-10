@@ -305,6 +305,9 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
             <p className="lead">Signed in as {userEmail}</p>
           </div>
           <div className="header-actions">
+            <Link href="/dashboard/flows" className="small-btn">
+              Flow Builder
+            </Link>
             <Link href="/dashboard/settings" className="small-btn">
               Settings
             </Link>
@@ -331,6 +334,9 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
           <p className="lead">Signed in as {userEmail}</p>
         </div>
         <div className="header-actions">
+          <Link href="/dashboard/flows" className="small-btn">
+            Flow Builder
+          </Link>
           <Link href="/dashboard/settings" className="small-btn">
             Settings
           </Link>

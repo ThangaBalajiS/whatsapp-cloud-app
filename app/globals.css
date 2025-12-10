@@ -743,6 +743,207 @@ button:disabled {
   font-size: 16px;
 }
 
+/* Flow builder */
+.builder-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.builder-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ghost-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.flow-builder {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+
+.flow-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.template-column {
+  overflow: hidden;
+}
+
+.connections-column {
+  overflow: hidden;
+}
+
+.column-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small-text {
+  font-size: 12px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.template-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.template-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.template-meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.pill.small {
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.template-body {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 12px 0;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.button-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.button-links-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.button-link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.button-link-row select {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(17, 24, 48, 0.8);
+  color: var(--text);
+}
+
+.button-chip {
+  background: rgba(91, 157, 255, 0.12);
+  border: 1px solid rgba(91, 157, 255, 0.4);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.connections-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.connection-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), transparent);
+}
+
+.flow-node {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px 12px;
+}
+
+.flow-node.target {
+  border-color: rgba(91, 157, 255, 0.4);
+  background: rgba(91, 157, 255, 0.08);
+}
+
+.node-title {
+  font-weight: 700;
+}
+
+.node-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.flow-arrow {
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.loading-templates,
+.empty-state {
+  padding: 20px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+
 /* Responsive */
 @media (max-width: 900px) {
   .inbox-layout {
@@ -761,6 +962,10 @@ button:disabled {
   .mobile-contacts-popover {
     display: flex;
     flex-direction: column;
+  }
+
+  .flow-builder {
+    grid-template-columns: 1fr;
   }
 }
 
