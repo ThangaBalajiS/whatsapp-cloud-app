@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import Link from 'next/link';
-import { LogoutButton } from './LogoutButton';
+import { DashboardSidebar } from './DashboardSidebar';
 
 type Contact = {
   _id: string;
@@ -299,28 +299,24 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
   if (!hasWhatsAppAccount) {
     return (
       <main className="dashboard-container">
-        <header className="dashboard-header">
-          <div>
-            <h1>WhatsApp Inbox</h1>
-            <p className="lead">Signed in as {userEmail}</p>
-          </div>
-          <div className="header-actions">
-            <Link href="/dashboard/flows" className="small-btn">
-              Flow Builder
-            </Link>
-            <Link href="/dashboard/settings" className="small-btn">
-              Settings
-            </Link>
-            <LogoutButton />
-          </div>
-        </header>
+        <div className="dashboard-body">
+          <DashboardSidebar userEmail={userEmail} />
+          <div className="dashboard-content">
+            <header className="dashboard-header">
+              <div>
+                <h1>WhatsApp Inbox</h1>
+                <p className="lead">Signed in as {userEmail}</p>
+              </div>
+            </header>
 
-        <div className="card setup-prompt">
-          <h2>Welcome to WhatsApp Cloud App!</h2>
-          <p>To get started, configure your WhatsApp Cloud API credentials.</p>
-          <Link href="/dashboard/settings" className="btn-primary">
-            Configure WhatsApp →
-          </Link>
+            <div className="card setup-prompt">
+              <h2>Welcome to WhatsApp Cloud App!</h2>
+              <p>To get started, configure your WhatsApp Cloud API credentials.</p>
+              <Link href="/dashboard/settings" className="btn-primary">
+                Configure WhatsApp →
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -328,203 +324,199 @@ export default function InboxClient({ userEmail, userId, hasWhatsAppAccount }: P
 
   return (
     <main className="dashboard-container">
-      <header className="dashboard-header">
-        <div>
-          <h1>WhatsApp Inbox</h1>
-          <p className="lead">Signed in as {userEmail}</p>
-        </div>
-        <div className="header-actions">
-          <Link href="/dashboard/flows" className="small-btn">
-            Flow Builder
-          </Link>
-          <Link href="/dashboard/settings" className="small-btn">
-            Settings
-          </Link>
-          <LogoutButton />
-        </div>
-      </header>
-
-      <div className="inbox-layout">
-        {/* Contacts sidebar - hidden on mobile */}
-        <div className="contacts-sidebar">
-          <div className="contacts-header">
-            <h2>Conversations</h2>
-          </div>
-          
-          {loading ? (
-            <div className="loading-contacts">Loading...</div>
-          ) : contacts.length === 0 ? (
-            <div className="no-contacts">
-              <p>No conversations yet</p>
-              <span>Messages will appear here when someone contacts you</span>
+      <div className="dashboard-body">
+        <DashboardSidebar userEmail={userEmail} />
+        <div className="dashboard-content">
+          <header className="dashboard-header">
+            <div>
+              <h1>WhatsApp Inbox</h1>
+              <p className="lead">Signed in as {userEmail}</p>
             </div>
-          ) : (
-            <div className="contacts-list">
-              {contacts.map((contact) => (
-                <div
-                  key={contact._id}
-                  className={`contact-item ${selectedContact?._id === contact._id ? 'active' : ''}`}
-                  onClick={() => selectContact(contact)}
-                >
-                  <div className="contact-avatar">
-                    {contact.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="contact-info">
-                    <div className="contact-name">{contact.name}</div>
-                    <div className="contact-phone">{contact.phoneNumber}</div>
-                  </div>
-                  {contact.unreadCount > 0 && (
-                    <div className="unread-badge">{contact.unreadCount}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          </header>
 
-        {/* Messages area */}
-        <div className="messages-area">
-          {selectedContact ? (
-            <>
-              <div className="messages-header">
-                <div className="contact-avatar">
-                  {selectedContact.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div className="contact-name">{selectedContact.name}</div>
-                  <div className="contact-phone">{selectedContact.phoneNumber}</div>
-                </div>
+          <div className="inbox-layout">
+            {/* Contacts sidebar - hidden on mobile */}
+            <div className="contacts-sidebar">
+              <div className="contacts-header">
+                <h2>Conversations</h2>
               </div>
-
-              <div 
-                className="messages-list" 
-                ref={messagesListRef}
-                onScroll={handleMessagesScroll}
-              >
-                {loadingMoreMessages && (
-                  <div className="loading-more-messages">
-                    <span>Loading older messages...</span>
-                  </div>
-                )}
-                {hasMoreMessages && !loadingMoreMessages && (
-                  <div className="load-more-hint">
-                    <span>Scroll up for older messages</span>
-                  </div>
-                )}
-                {messages.map((msg, idx) => {
-                  const showDate = idx === 0 || 
-                    formatDate(messages[idx - 1].timestamp) !== formatDate(msg.timestamp);
-                  
-                  return (
-                    <div key={msg._id}>
-                      {showDate && (
-                        <div className="date-divider">
-                          <span>{formatDate(msg.timestamp)}</span>
-                        </div>
-                      )}
-                      <div className={`message ${msg.direction}`}>
-                        <div className="message-content">{msg.content}</div>
-                        <div className="message-meta">
-                          <span className="message-time">{formatTime(msg.timestamp)}</span>
-                          {msg.direction === 'outgoing' && (
-                            <span className="message-status">
-                              {msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
-
-              <form className="message-input" onSubmit={handleSend}>
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  disabled={sending}
-                />
-                <button type="submit" disabled={sending || !newMessage.trim()}>
-                  {sending ? '...' : 'Send'}
-                </button>
-              </form>
-            </>
-          ) : (
-            <div className="no-conversation">
-              <div className="no-conversation-icon">💬</div>
-              <h3>Select a conversation</h3>
-              <p>Choose a contact from the list to view messages</p>
-            </div>
-          )}
-        </div>
-
-        {/* Mobile floating contacts button */}
-        <button 
-          className="mobile-contacts-fab"
-          onClick={() => setShowContactsPopover(!showContactsPopover)}
-          aria-label="Open contacts"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-          {contacts.reduce((sum, c) => sum + c.unreadCount, 0) > 0 && (
-            <span className="fab-badge">
-              {contacts.reduce((sum, c) => sum + c.unreadCount, 0)}
-            </span>
-          )}
-        </button>
-
-        {/* Mobile contacts popover */}
-        {showContactsPopover && (
-          <div className="mobile-contacts-popover" ref={popoverRef}>
-            <div className="popover-header">
-              <h3>Conversations</h3>
-              <button 
-                className="popover-close"
-                onClick={() => setShowContactsPopover(false)}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
-            <div className="popover-contacts-list">
+              
               {loading ? (
                 <div className="loading-contacts">Loading...</div>
               ) : contacts.length === 0 ? (
                 <div className="no-contacts">
                   <p>No conversations yet</p>
+                  <span>Messages will appear here when someone contacts you</span>
                 </div>
               ) : (
-                contacts.map((contact) => (
-                  <div
-                    key={contact._id}
-                    className={`contact-item ${selectedContact?._id === contact._id ? 'active' : ''}`}
-                    onClick={() => selectContact(contact)}
-                  >
-                    <div className="contact-avatar">
-                      {contact.name.charAt(0).toUpperCase()}
+                <div className="contacts-list">
+                  {contacts.map((contact) => (
+                    <div
+                      key={contact._id}
+                      className={`contact-item ${selectedContact?._id === contact._id ? 'active' : ''}`}
+                      onClick={() => selectContact(contact)}
+                    >
+                      <div className="contact-avatar">
+                        {contact.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="contact-info">
+                        <div className="contact-name">{contact.name}</div>
+                        <div className="contact-phone">{contact.phoneNumber}</div>
+                      </div>
+                      {contact.unreadCount > 0 && (
+                        <div className="unread-badge">{contact.unreadCount}</div>
+                      )}
                     </div>
-                    <div className="contact-info">
-                      <div className="contact-name">{contact.name}</div>
-                      <div className="contact-phone">{contact.phoneNumber}</div>
-                    </div>
-                    {contact.unreadCount > 0 && (
-                      <div className="unread-badge">{contact.unreadCount}</div>
-                    )}
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
+
+            {/* Messages area */}
+            <div className="messages-area">
+              {selectedContact ? (
+                <>
+                  <div className="messages-header">
+                    <div className="contact-avatar">
+                      {selectedContact.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="contact-name">{selectedContact.name}</div>
+                      <div className="contact-phone">{selectedContact.phoneNumber}</div>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="messages-list" 
+                    ref={messagesListRef}
+                    onScroll={handleMessagesScroll}
+                  >
+                    {loadingMoreMessages && (
+                      <div className="loading-more-messages">
+                        <span>Loading older messages...</span>
+                      </div>
+                    )}
+                    {hasMoreMessages && !loadingMoreMessages && (
+                      <div className="load-more-hint">
+                        <span>Scroll up for older messages</span>
+                      </div>
+                    )}
+                    {messages.map((msg, idx) => {
+                      const showDate = idx === 0 || 
+                        formatDate(messages[idx - 1].timestamp) !== formatDate(msg.timestamp);
+                      
+                      return (
+                        <div key={msg._id}>
+                          {showDate && (
+                            <div className="date-divider">
+                              <span>{formatDate(msg.timestamp)}</span>
+                            </div>
+                          )}
+                          <div className={`message ${msg.direction}`}>
+                            <div className="message-content">{msg.content}</div>
+                            <div className="message-meta">
+                              <span className="message-time">{formatTime(msg.timestamp)}</span>
+                              {msg.direction === 'outgoing' && (
+                                <span className="message-status">
+                                  {msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  <form className="message-input" onSubmit={handleSend}>
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Type a message..."
+                      disabled={sending}
+                    />
+                    <button type="submit" disabled={sending || !newMessage.trim()}>
+                      {sending ? '...' : 'Send'}
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="no-conversation">
+                  <div className="no-conversation-icon">💬</div>
+                  <h3>Select a conversation</h3>
+                  <p>Choose a contact from the list to view messages</p>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile floating contacts button */}
+            <button 
+              className="mobile-contacts-fab"
+              onClick={() => setShowContactsPopover(!showContactsPopover)}
+              aria-label="Open contacts"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              {contacts.reduce((sum, c) => sum + c.unreadCount, 0) > 0 && (
+                <span className="fab-badge">
+                  {contacts.reduce((sum, c) => sum + c.unreadCount, 0)}
+                </span>
+              )}
+            </button>
+
+            {/* Mobile contacts popover */}
+            {showContactsPopover && (
+              <div className="mobile-contacts-popover" ref={popoverRef}>
+                <div className="popover-header">
+                  <h3>Conversations</h3>
+                  <button 
+                    className="popover-close"
+                    onClick={() => setShowContactsPopover(false)}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+                <div className="popover-contacts-list">
+                  {loading ? (
+                    <div className="loading-contacts">Loading...</div>
+                  ) : contacts.length === 0 ? (
+                    <div className="no-contacts">
+                      <p>No conversations yet</p>
+                    </div>
+                  ) : (
+                    contacts.map((contact) => (
+                      <div
+                        key={contact._id}
+                        className={`contact-item ${selectedContact?._id === contact._id ? 'active' : ''}`}
+                        onClick={() => selectContact(contact)}
+                      >
+                        <div className="contact-avatar">
+                          {contact.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="contact-info">
+                          <div className="contact-name">{contact.name}</div>
+                          <div className="contact-phone">{contact.phoneNumber}</div>
+                        </div>
+                        {contact.unreadCount > 0 && (
+                          <div className="unread-badge">{contact.unreadCount}</div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </main>
   );

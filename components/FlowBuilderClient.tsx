@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { LogoutButton } from './LogoutButton';
+import { DashboardSidebar } from './DashboardSidebar';
 
 type TemplateButton = {
   type?: string;
@@ -368,24 +368,23 @@ export default function FlowBuilderClient({
   if (!hasWhatsAppAccount) {
     return (
       <main className="dashboard-container">
-        <header className="dashboard-header">
-          <div>
-            <h1>Flow Builder</h1>
-            <p className="lead">Signed in as {userEmail}</p>
+        <div className="dashboard-body">
+          <DashboardSidebar userEmail={userEmail} />
+          <div className="dashboard-content">
+            <header className="dashboard-header">
+              <div>
+                <h1>Flow Builder</h1>
+                <p className="lead">Signed in as {userEmail}</p>
+              </div>
+            </header>
+            <div className="card setup-prompt">
+              <h2>Connect WhatsApp first</h2>
+              <p>Configure your WhatsApp Cloud API credentials to pull templates.</p>
+              <Link href="/dashboard/settings" className="btn-primary">
+                Go to Settings →
+              </Link>
+            </div>
           </div>
-          <div className="header-actions">
-            <Link href="/dashboard/settings" className="small-btn">
-              Settings
-            </Link>
-            <LogoutButton />
-          </div>
-        </header>
-        <div className="card setup-prompt">
-          <h2>Connect WhatsApp first</h2>
-          <p>Configure your WhatsApp Cloud API credentials to pull templates.</p>
-          <Link href="/dashboard/settings" className="btn-primary">
-            Go to Settings →
-          </Link>
         </div>
       </main>
     );
@@ -393,51 +392,45 @@ export default function FlowBuilderClient({
 
   return (
     <main className="dashboard-container">
-      <header className="dashboard-header">
-        <div>
-          <h1>Flow Builder</h1>
-          <p className="lead">Signed in as {userEmail}</p>
-        </div>
-        <div className="header-actions">
-          <Link href="/dashboard" className="small-btn">
-            Inbox
-          </Link>
-          <Link href="/dashboard/settings" className="small-btn">
-            Settings
-          </Link>
-          <LogoutButton />
-        </div>
-      </header>
+      <div className="dashboard-body">
+        <DashboardSidebar userEmail={userEmail} />
+        <div className="dashboard-content">
+          <header className="dashboard-header">
+            <div>
+              <h1>Flow Builder</h1>
+              <p className="lead">Signed in as {userEmail}</p>
+            </div>
+          </header>
 
-      <div className="builder-actions">
-        <div className="pill">
-          {loading ? 'Loading templates…' : `${templates.length} templates`}
-        </div>
-        <div className="builder-action-buttons">
-          <input
-            value={flowName}
-            onChange={(e) => setFlowName(e.target.value)}
-            placeholder="Flow name"
-            className="small-input"
-          />
-          <button className="ghost-btn" onClick={fetchTemplates} disabled={loading}>
-            Refresh
-          </button>
-          <button className="ghost-btn" onClick={resetConnections} disabled={!connectionList.length}>
-            Clear links
-          </button>
-          <button className="btn-primary" onClick={saveFlow} disabled={savingFlow}>
-            {savingFlow ? 'Saving…' : 'Save flow'}
-          </button>
-        </div>
-      </div>
-
-      <div className="flow-builder">
-        <section className="flow-column template-column">
-          <div className="column-header">
-            <h2>Templates</h2>
-            <p className="muted">Map quick-reply buttons to next steps.</p>
+          <div className="builder-actions">
+            <div className="pill">
+              {loading ? 'Loading templates…' : `${templates.length} templates`}
+            </div>
+            <div className="builder-action-buttons">
+              <input
+                value={flowName}
+                onChange={(e) => setFlowName(e.target.value)}
+                placeholder="Flow name"
+                className="small-input"
+              />
+              <button className="ghost-btn" onClick={fetchTemplates} disabled={loading}>
+                Refresh
+              </button>
+              <button className="ghost-btn" onClick={resetConnections} disabled={!connectionList.length}>
+                Clear links
+              </button>
+              <button className="btn-primary" onClick={saveFlow} disabled={savingFlow}>
+                {savingFlow ? 'Saving…' : 'Save flow'}
+              </button>
+            </div>
           </div>
+
+          <div className="flow-builder">
+            <section className="flow-column template-column">
+              <div className="column-header">
+                <h2>Templates</h2>
+                <p className="muted">Map quick-reply buttons to next steps.</p>
+              </div>
 
           {error && <div className="status error">{error}</div>}
 
@@ -524,61 +517,63 @@ export default function FlowBuilderClient({
           )}
         </section>
 
-        <section className="flow-column connections-column card">
-          <div className="column-header">
-            <h2>Connections</h2>
-            <p className="muted">Visual map of how buttons route to templates.</p>
+            <section className="flow-column connections-column card">
+              <div className="column-header">
+                <h2>Connections</h2>
+                <p className="muted">Visual map of how buttons route to templates.</p>
+              </div>
+
+              {connectionList.length === 0 ? (
+                <div className="empty-state">
+                  <p>No connections yet</p>
+                  <span className="muted">Select a target template for any button to create a link.</span>
+                </div>
+              ) : (
+                <div className="connections-board">
+                  {connectionList.map((conn) => {
+                    const functionTarget = functions.find((fn) => fn.name === conn.target.target);
+                    return (
+                      <div key={`${conn.source}-${conn.button}`} className="connection-card vertical">
+                        <div className="flow-node">
+                          <div className="node-title">{conn.source}</div>
+                          <div className="node-subtitle">button: {conn.button}</div>
+                        </div>
+                        <div className="flow-arrow vertical">↓</div>
+                        {conn.target.targetType === 'function' ? (
+                          <>
+                            <div className="flow-node target">
+                              <div className="node-title">fn: {conn.target.target}</div>
+                              <div className="node-subtitle">runs with input</div>
+                            </div>
+                            {functionTarget?.nextTemplate ? (
+                              <>
+                                <div className="flow-arrow vertical">↓</div>
+                                <div className="flow-node target">
+                                  <div className="node-title">{functionTarget.nextTemplate}</div>
+                                  <div className="node-subtitle">next template</div>
+                                </div>
+                              </>
+                            ) : null}
+                          </>
+                        ) : (
+                          <div className="flow-node target">
+                            <div className="node-title">{conn.target.target}</div>
+                            <div className="node-subtitle">opens on reply</div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* Functions UI hidden for now */}
           </div>
 
-          {connectionList.length === 0 ? (
-            <div className="empty-state">
-              <p>No connections yet</p>
-              <span className="muted">Select a target template for any button to create a link.</span>
-            </div>
-          ) : (
-            <div className="connections-board">
-              {connectionList.map((conn) => {
-                const functionTarget = functions.find((fn) => fn.name === conn.target.target);
-                return (
-                  <div key={`${conn.source}-${conn.button}`} className="connection-card vertical">
-                    <div className="flow-node">
-                      <div className="node-title">{conn.source}</div>
-                      <div className="node-subtitle">button: {conn.button}</div>
-                    </div>
-                    <div className="flow-arrow vertical">↓</div>
-                    {conn.target.targetType === 'function' ? (
-                      <>
-                        <div className="flow-node target">
-                          <div className="node-title">fn: {conn.target.target}</div>
-                          <div className="node-subtitle">runs with input</div>
-                        </div>
-                        {functionTarget?.nextTemplate ? (
-                          <>
-                            <div className="flow-arrow vertical">↓</div>
-                            <div className="flow-node target">
-                              <div className="node-title">{functionTarget.nextTemplate}</div>
-                              <div className="node-subtitle">next template</div>
-                            </div>
-                          </>
-                        ) : null}
-                      </>
-                    ) : (
-                      <div className="flow-node target">
-                        <div className="node-title">{conn.target.target}</div>
-                        <div className="node-subtitle">opens on reply</div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Functions UI hidden for now */}
+          {saveStatus && <div className="status success">{saveStatus}</div>}
+        </div>
       </div>
-
-      {saveStatus && <div className="status success">{saveStatus}</div>}
     </main>
   );
 }

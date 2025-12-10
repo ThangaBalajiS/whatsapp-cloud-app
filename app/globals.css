@@ -207,6 +207,97 @@ button:disabled {
   overflow: hidden;
 }
 
+.dashboard-body {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-sidebar {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.sidebar-top {
+  display: grid;
+  gap: 16px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.brand-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.brand-subtitle {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sidebar-link.active {
+  border-color: rgba(91, 157, 255, 0.4);
+  background: rgba(91, 157, 255, 0.12);
+  color: var(--text);
+}
+
+.sidebar-pill {
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(91, 157, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+}
+
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -1047,6 +1138,32 @@ button:disabled {
 
   .flow-builder {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-body {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .sidebar-link {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .sidebar-footer {
+    margin-top: 0;
+    margin-left: auto;
   }
 }
 
