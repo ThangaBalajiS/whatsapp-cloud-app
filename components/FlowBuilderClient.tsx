@@ -432,90 +432,90 @@ export default function FlowBuilderClient({
                 <p className="muted">Map quick-reply buttons to next steps.</p>
               </div>
 
-          {error && <div className="status error">{error}</div>}
+              {error && <div className="status error">{error}</div>}
 
-          {loading ? (
-            <div className="loading-templates">Loading templates…</div>
-          ) : templates.length === 0 ? (
-            <div className="empty-state">
-              <p>No templates found for this account.</p>
-              <span className="muted">
-                Create templates in Meta and refresh to see them here.
-              </span>
-            </div>
-          ) : (
-            <div className="template-grid">
-              {templates.map((template) => {
-                const bodyText = readBodyText(template.components);
-                const buttons = extractButtons(template.components);
+              {loading ? (
+                <div className="loading-templates">Loading templates…</div>
+              ) : templates.length === 0 ? (
+                <div className="empty-state">
+                  <p>No templates found for this account.</p>
+                  <span className="muted">
+                    Create templates in Meta and refresh to see them here.
+                  </span>
+                </div>
+              ) : (
+                <div className="template-grid">
+                  {templates.map((template) => {
+                    const bodyText = readBodyText(template.components);
+                    const buttons = extractButtons(template.components);
 
-                return (
-                  <div key={template.name} className="template-card card">
-                    <div className="template-card-header">
-                      <div>
-                        <div className="template-name">{template.name}</div>
-                        <div className="template-meta">
-                          <span className="pill small">{template.category}</span>
-                          <span className="pill small">{template.language}</span>
-                        </div>
-                      </div>
-                      <span
-                        className={`status-indicator ${template.status === 'APPROVED' ? 'connected' : 'disconnected'}`}
-                      >
-                        <span className="status-dot" />
-                        {template.status.toLowerCase()}
-                      </span>
-                    </div>
-
-                    {bodyText && (
-                      <pre className="template-body" aria-label="Template body">
-                        {bodyText}
-                      </pre>
-                    )}
-
-                    {buttons.length > 0 ? (
-                      <div className="button-links">
-                        <div className="button-links-title">Buttons</div>
-                        {buttons.map((button, index) => {
-                          const key = buildButtonKey(template.name, button, index);
-                          const selected = connections[key];
-                          const value = selected ? `${selected.targetType}::${selected.target}` : '';
-                          return (
-                            <div key={key} className="button-link-row">
-                              <div className="button-chip">
-                                {button.text || button.type || 'Button'}
-                              </div>
-                              <select
-                                value={value}
-                                onChange={(e) => handleConnectionChange(key, e.target.value)}
-                              >
-                                <option value="">Not connected</option>
-                                {templates
-                                  .filter((t) => t.name !== template.name)
-                                  .map((t) => (
-                                    <option key={t.name} value={`template::${t.name}`}>
-                                      {t.name}
-                                    </option>
-                                  ))}
-                                {functions.map((fn) => (
-                                  <option key={fn.name} value={`function::${fn.name}`}>
-                                    Function: {fn.name}
-                                  </option>
-                                ))}
-                              </select>
+                    return (
+                      <div key={template.name} className="template-card card">
+                        <div className="template-card-header">
+                          <div>
+                            <div className="template-name">{template.name}</div>
+                            <div className="template-meta">
+                              <span className="pill small">{template.category}</span>
+                              <span className="pill small">{template.language}</span>
                             </div>
-                          );
-                        })}
+                          </div>
+                          <span
+                            className={`status-indicator ${template.status === 'APPROVED' ? 'connected' : 'disconnected'}`}
+                          >
+                            <span className="status-dot" />
+                            {template.status.toLowerCase()}
+                          </span>
+                        </div>
+
+                        {bodyText && (
+                          <pre className="template-body" aria-label="Template body">
+                            {bodyText}
+                          </pre>
+                        )}
+
+                        {buttons.length > 0 ? (
+                          <div className="button-links">
+                            <div className="button-links-title">Buttons</div>
+                            {buttons.map((button, index) => {
+                              const key = buildButtonKey(template.name, button, index);
+                              const selected = connections[key];
+                              const value = selected ? `${selected.targetType}::${selected.target}` : '';
+                              return (
+                                <div key={key} className="button-link-row">
+                                  <div className="button-chip">
+                                    {button.text || button.type || 'Button'}
+                                  </div>
+                                  <select
+                                    value={value}
+                                    onChange={(e) => handleConnectionChange(key, e.target.value)}
+                                  >
+                                    <option value="">Not connected</option>
+                                    {templates
+                                      .filter((t) => t.name !== template.name)
+                                      .map((t) => (
+                                        <option key={t.name} value={`template::${t.name}`}>
+                                          {t.name}
+                                        </option>
+                                      ))}
+                                    {functions.map((fn) => (
+                                      <option key={fn.name} value={`function::${fn.name}`}>
+                                        Function: {fn.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="muted small-text">No buttons in this template.</div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="muted small-text">No buttons in this template.</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
             <section className="flow-column connections-column card">
               <div className="column-header">
@@ -568,7 +568,7 @@ export default function FlowBuilderClient({
               )}
             </section>
 
-            {/* Functions UI hidden for now */}
+
           </div>
 
           {saveStatus && <div className="status success">{saveStatus}</div>}

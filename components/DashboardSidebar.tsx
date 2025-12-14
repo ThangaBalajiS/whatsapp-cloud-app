@@ -44,7 +44,6 @@ export function DashboardSidebar({ userEmail }: { userEmail?: string }) {
               className={`sidebar-link ${isActive(item.href) ? 'active' : ''}`}
             >
               <span>{item.label}</span>
-              {isActive(item.href) ? <span className="sidebar-pill">Now</span> : null}
             </Link>
           ))}
         </nav>
