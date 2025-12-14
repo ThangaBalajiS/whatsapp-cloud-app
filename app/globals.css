@@ -1476,7 +1476,449 @@ button:disabled {
   gap: 8px;
 }
 
+/* Flow Builder - Empty State Hero */
+.empty-state-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 80px 40px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.03), transparent);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  margin-top: 20px;
+}
 
+.empty-state-hero .empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+
+.empty-state-hero h2 {
+  margin: 0 0 12px;
+  font-size: 24px;
+}
+
+.empty-state-hero p {
+  color: var(--muted);
+  margin: 0 0 24px;
+  max-width: 400px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  color: var(--muted);
+}
+
+/* Flow Cards Grid */
+.flows-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.flow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flow-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flow-card-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.flow-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.flow-card-trigger {
+  display: flex;
+}
+
+.flow-trigger-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(91, 157, 255, 0.12);
+  border: 1px solid rgba(91, 157, 255, 0.25);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.flow-card-first-template {
+  font-size: 14px;
+}
+
+.flow-card-meta {
+  margin-top: auto;
+}
+
+/* Flow Builder Workspace */
+.flow-builder-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-top: 16px;
+}
+
+.flow-name-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 400px;
+}
+
+.flow-name-input label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.flow-name-input input {
+  padding: 12px 14px;
+  background: rgba(17, 24, 48, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* Flow Canvas */
+.flow-canvas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 40px 20px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.02), transparent);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  min-height: 400px;
+  max-height: calc(100vh - 300px);
+  overflow: auto;
+  min-width: fit-content;
+}
+
+/* Flow Nodes */
+.flow-node-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: rgba(17, 24, 48, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  min-width: 240px;
+}
+
+.flow-node-card.trigger {
+  background: linear-gradient(135deg, rgba(91, 157, 255, 0.15), rgba(17, 24, 48, 0.9));
+  border-color: rgba(91, 157, 255, 0.3);
+}
+
+.flow-node-icon {
+  font-size: 24px;
+}
+
+.flow-node-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flow-node-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.flow-node-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Trigger Config */
+.flow-trigger-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.trigger-config {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  min-width: 280px;
+}
+
+.trigger-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trigger-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.trigger-option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.trigger-filter {
+  display: flex;
+  gap: 8px;
+}
+
+.trigger-filter input {
+  flex: 1;
+  padding: 10px 12px;
+  background: rgba(17, 24, 48, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.trigger-filter select {
+  padding: 10px 12px;
+  background: rgba(17, 24, 48, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* Flow Connector Lines */
+.flow-connector-line {
+  width: 2px;
+  height: 40px;
+  background: linear-gradient(180deg, rgba(91, 157, 255, 0.5), rgba(91, 157, 255, 0.2));
+}
+
+/* Flow Add Node Button */
+.flow-add-node-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  background: rgba(91, 157, 255, 0.1);
+  border: 2px dashed rgba(91, 157, 255, 0.4);
+  border-radius: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.flow-add-node-btn:hover {
+  background: rgba(91, 157, 255, 0.2);
+  border-color: rgba(91, 157, 255, 0.6);
+}
+
+.flow-add-node-btn.large {
+  padding: 20px 32px;
+  font-size: 15px;
+}
+
+.plus-icon {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Flow Tree / Template Nodes */
+.flow-tree {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-remove-first-btn,
+.flow-remove-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 82, 82, 0.9);
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.flow-tree:hover>.flow-remove-first-btn,
+.flow-branch-content:hover>.flow-remove-btn {
+  opacity: 1;
+}
+
+.flow-template-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.flow-button-branches {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 24px;
+  padding-top: 16px;
+}
+
+.flow-button-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.flow-branch-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.flow-branch-connector {
+  width: 2px;
+  height: 20px;
+  background: rgba(91, 157, 255, 0.3);
+}
+
+.flow-button-label {
+  padding: 6px 12px;
+  background: rgba(91, 157, 255, 0.12);
+  border: 1px solid rgba(91, 157, 255, 0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.flow-branch-content {
+  position: relative;
+}
+
+/* Function connection styles */
+.flow-function-connection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.flow-function-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.flow-node-card.function {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(17, 24, 48, 0.9));
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.empty-state-small {
+  padding: 40px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state-small p {
+  margin-bottom: 16px;
+}
+
+.btn-primary.small {
+  padding: 10px 16px;
+  font-size: 13px;
+}
+
+/* Template Selection Modal */
+.template-select-modal {
+  width: 90vw;
+  max-width: 700px;
+  max-height: 80vh;
+}
+
+.template-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.template-select-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.template-select-item:hover {
+  background: rgba(91, 157, 255, 0.1);
+  border-color: rgba(91, 157, 255, 0.3);
+}
+
+.template-select-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.template-select-meta {
+  display: flex;
+  gap: 6px;
+}
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
 
 /* Responsive */
 @media (max-width: 900px) {

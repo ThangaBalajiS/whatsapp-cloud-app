@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { DashboardSidebar } from './DashboardSidebar';
 
 type FlowFunction = {
+    _id?: string;
     name: string;
     description?: string;
     code: string;
@@ -72,9 +73,9 @@ export default function FunctionsClient({
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [templatesRes, flowRes] = await Promise.all([
+            const [templatesRes, functionsRes] = await Promise.all([
                 fetch('/api/whatsapp/templates'),
-                fetch('/api/flows', { cache: 'no-store' }),
+                fetch('/api/functions', { cache: 'no-store' }),
             ]);
 
             const templatesData = await templatesRes.json();
@@ -82,9 +83,9 @@ export default function FunctionsClient({
                 setTemplates(templatesData.templates || []);
             }
 
-            const flowData = await flowRes.json();
-            if (flowRes.ok && flowData.flow) {
-                setFunctions(flowData.flow.functions || []);
+            const functionsData = await functionsRes.json();
+            if (functionsRes.ok) {
+                setFunctions(functionsData.functions || []);
             }
         } catch (err: any) {
             setError(err.message || 'Failed to load data');
@@ -109,19 +110,24 @@ export default function FunctionsClient({
         setSuccess(null);
 
         try {
-            // Update local state
-            const updatedFunctions = functions.filter((fn) => fn.name !== name);
-            updatedFunctions.push({
-                ...functionForm,
-                timeoutMs: Number(functionForm.timeoutMs) || 5000,
-            });
+            const isEditing = !!editingFunction;
+            const existingFn = functions.find(fn => fn.name === editingFunction);
 
-            // Save to backend
-            const res = await fetch('/api/flows', {
-                method: 'POST',
+            const url = isEditing && existingFn?._id
+                ? `/api/functions/${existingFn._id}`
+                : '/api/functions';
+            const method = isEditing && existingFn?._id ? 'PUT' : 'POST';
+
+            const res = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    functions: updatedFunctions,
+                    name: functionForm.name,
+                    description: functionForm.description,
+                    code: functionForm.code,
+                    inputKey: functionForm.inputKey,
+                    timeoutMs: Number(functionForm.timeoutMs) || 5000,
+                    nextTemplate: functionForm.nextTemplate,
                 }),
             });
 
@@ -130,8 +136,8 @@ export default function FunctionsClient({
                 throw new Error(data?.message || 'Failed to save function');
             }
 
-            setFunctions(data.flow?.functions || updatedFunctions);
-            setSuccess(editingFunction ? 'Function updated!' : 'Function added!');
+            await fetchData();
+            setSuccess(isEditing ? 'Function updated!' : 'Function added!');
             resetForm();
         } catch (err: any) {
             setError(err.message || 'Unable to save function');
@@ -140,20 +146,21 @@ export default function FunctionsClient({
         }
     };
 
-    const removeFunction = async (name: string) => {
+    const removeFunction = async (fnToRemove: FlowFunction) => {
+        if (!fnToRemove._id) {
+            setError('Cannot delete function without ID');
+            return;
+        }
+
+        if (!confirm(`Delete function "${fnToRemove.name}"?`)) return;
+
         setSaving(true);
         setError(null);
         setSuccess(null);
 
         try {
-            const updatedFunctions = functions.filter((fn) => fn.name !== name);
-
-            const res = await fetch('/api/flows', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    functions: updatedFunctions,
-                }),
+            const res = await fetch(`/api/functions/${fnToRemove._id}`, {
+                method: 'DELETE',
             });
 
             const data = await res.json();
@@ -161,7 +168,7 @@ export default function FunctionsClient({
                 throw new Error(data?.message || 'Failed to remove function');
             }
 
-            setFunctions(data.flow?.functions || updatedFunctions);
+            await fetchData();
             setSuccess('Function removed!');
         } catch (err: any) {
             setError(err.message || 'Unable to remove function');
@@ -229,21 +236,29 @@ export default function FunctionsClient({
             setTestError('Pick a function to test.');
             return;
         }
+
+        const fn = functions.find(f => f.name === testFunctionName);
+        if (!fn) {
+            setTestError('Function not found.');
+            return;
+        }
+
         try {
-            const res = await fetch('/api/flows/execute', {
+            const res = await fetch('/api/functions/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    functionName: testFunctionName,
+                    code: fn.code,
                     input: testInput,
-                    context: { preview: true },
+                    inputKey: fn.inputKey,
+                    timeoutMs: fn.timeoutMs,
                 }),
             });
             const data = await res.json();
             if (!res.ok) {
                 throw new Error(data?.message || 'Failed to run function');
             }
-            setTestResult(JSON.stringify(data.result, null, 2));
+            setTestResult(JSON.stringify(data.output, null, 2));
         } catch (err: any) {
             setTestError(err.message || 'Function test failed');
         }
@@ -317,7 +332,7 @@ export default function FunctionsClient({
                                                         <button className="ghost-btn small" onClick={() => openModal(fn)}>
                                                             Edit
                                                         </button>
-                                                        <button className="ghost-btn small danger" onClick={() => removeFunction(fn.name)} disabled={saving}>
+                                                        <button className="ghost-btn small danger" onClick={() => removeFunction(fn)} disabled={saving}>
                                                             Remove
                                                         </button>
                                                     </div>

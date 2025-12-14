@@ -1,8 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardSidebar } from './DashboardSidebar';
+
+type TriggerMatchType = 'any' | 'includes' | 'starts_with' | 'exact';
+
+type FlowTrigger = {
+  matchType: TriggerMatchType;
+  matchText: string;
+};
 
 type TemplateButton = {
   type?: string;
@@ -25,20 +32,16 @@ type Template = {
   components?: TemplateComponent[];
 };
 
-type Props = {
-  userEmail: string;
-  userId: string;
-  hasWhatsAppAccount: boolean;
-};
-
-type ConnectionTarget = {
+type FlowConnection = {
+  sourceTemplate: string;
+  button?: string;
   targetType: 'template' | 'function';
   target: string;
+  nextTemplate?: string;
 };
 
-type ConnectionMap = Record<string, ConnectionTarget>;
-
 type FlowFunction = {
+  _id: string;
   name: string;
   description?: string;
   code: string;
@@ -47,324 +50,484 @@ type FlowFunction = {
   nextTemplate?: string;
 };
 
-type FlowConnectionDto = {
-  sourceTemplate: string;
-  button: string;
-  targetType: 'template' | 'function';
-  target: string;
+type Flow = {
+  _id: string;
+  name: string;
+  trigger: FlowTrigger;
+  firstTemplate: string;
+  connections: FlowConnection[];
+  functions: any[];
+  createdAt: string;
+  updatedAt: string;
 };
 
-const migrateConnections = (raw: unknown): ConnectionMap => {
-  if (!raw || typeof raw !== 'object') return {};
-  const result: ConnectionMap = {};
-  Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
-    if (typeof value === 'string') {
-      result[key] = { targetType: 'template', target: value };
-    } else if (
-      value &&
-      typeof value === 'object' &&
-      'targetType' in value &&
-      'target' in value
-    ) {
-      const target = value as ConnectionTarget;
-      result[key] = {
-        targetType: target.targetType,
-        target: target.target,
-      };
-    }
-  });
-  return result;
+type Props = {
+  userEmail: string;
+  userId: string;
+  hasWhatsAppAccount: boolean;
 };
 
-const readBodyText = (components?: TemplateComponent[]) => {
-  const header = components?.find((c) => c.type === 'HEADER')?.text;
-  const body = components?.find((c) => c.type === 'BODY')?.text;
-  return header ? `${header}\n\n${body || ''}` : body || '';
+type ViewMode = 'list' | 'builder';
+
+type FlowNode = {
+  type: 'trigger' | 'template';
+  templateName?: string;
+  buttons?: { text: string; targetTemplate?: string }[];
 };
-
-const extractButtons = (components?: TemplateComponent[]) =>
-  components
-    ?.filter((c) => c.type === 'BUTTONS')
-    .flatMap((c) => c.buttons?.map((button) => button) || []) || [];
-
-const buildButtonKey = (templateName: string, button: TemplateButton, index: number) => {
-  const label = button.text || button.type || `button-${index}`;
-  return `${templateName}::${label}`;
-};
-
-const defaultFunctionCode = `module.exports = async ({ input, context }) => {
-  // input: value captured from the customer
-  // context: helper info like userId
-  return {
-    processedValue: input,
-    echo: true,
-    user: context.userId,
-  };
-};`;
 
 export default function FlowBuilderClient({
   userEmail,
   userId,
   hasWhatsAppAccount,
 }: Props) {
-  const storageKey = useMemo(() => `flow-builder-connections-${userId}`, [userId]);
-
+  const [flows, setFlows] = useState<Flow[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [connections, setConnections] = useState<ConnectionMap>({});
   const [functions, setFunctions] = useState<FlowFunction[]>([]);
-  const [flowName, setFlowName] = useState('Default Flow');
-  const [savingFlow, setSavingFlow] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [functionForm, setFunctionForm] = useState<FlowFunction>({
-    name: '',
-    description: '',
-    code: defaultFunctionCode,
-    inputKey: 'input',
-    timeoutMs: 5000,
-    nextTemplate: '',
-  });
-  const [testInput, setTestInput] = useState('');
-  const [testFunctionName, setTestFunctionName] = useState('');
-  const [testResult, setTestResult] = useState<string | null>(null);
-  const [testError, setTestError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // Load saved connections
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.connections) {
-          setConnections(migrateConnections(parsed.connections));
-        }
-        if (parsed.functions) {
-          setFunctions(parsed.functions);
-        }
-        if (parsed.flowName) {
-          setFlowName(parsed.flowName);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to read saved connections', err);
-    }
-  }, [storageKey]);
+  // View state
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
 
-  // Persist connections
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      localStorage.setItem(
-        storageKey,
-        JSON.stringify({ connections, functions, flowName })
-      );
-    } catch (err) {
-      console.error('Failed to persist connections', err);
-    }
-  }, [connections, functions, flowName, storageKey]);
+  // Builder state
+  const [flowName, setFlowName] = useState('New Flow');
+  const [trigger, setTrigger] = useState<FlowTrigger>({ matchType: 'any', matchText: '' });
+  const [firstTemplate, setFirstTemplate] = useState('');
+  const [connections, setConnections] = useState<FlowConnection[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Modal states
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showFunctionModal, setShowFunctionModal] = useState(false);
+  const [pendingButtonConnection, setPendingButtonConnection] = useState<{
+    sourceTemplate: string;
+    button: string;
+  } | null>(null);
+  const [pendingFunctionConnection, setPendingFunctionConnection] = useState<{
+    sourceTemplate: string;
+  } | null>(null);
+  const [pendingFunctionNextTemplate, setPendingFunctionNextTemplate] = useState<{
+    sourceTemplate: string;
+    functionName: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (!hasWhatsAppAccount) {
+    if (hasWhatsAppAccount) {
+      fetchData();
+    } else {
       setLoading(false);
-      return;
     }
-    fetchTemplates();
-    fetchFlow();
   }, [hasWhatsAppAccount]);
 
-  const fetchTemplates = async () => {
+  const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/whatsapp/templates');
-      const data = await res.json();
+      const [flowsRes, templatesRes, functionsRes] = await Promise.all([
+        fetch('/api/flows'),
+        fetch('/api/whatsapp/templates'),
+        fetch('/api/functions'),
+      ]);
 
-      if (!res.ok) {
-        throw new Error(data?.message || 'Failed to load templates');
+      const flowsData = await flowsRes.json();
+      if (flowsRes.ok) {
+        setFlows(flowsData.flows || []);
       }
 
-      setTemplates(data.templates || []);
+      const templatesData = await templatesRes.json();
+      if (templatesRes.ok) {
+        setTemplates(templatesData.templates || []);
+      }
+
+      const functionsData = await functionsRes.json();
+      if (functionsRes.ok) {
+        setFunctions(functionsData.functions || []);
+      }
     } catch (err: any) {
-      setError(err.message || 'Unable to fetch templates');
+      setError(err.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchFlow = async () => {
+  const createNewFlow = () => {
+    setSelectedFlow(null);
+    setFlowName('New Flow');
+    setTrigger({ matchType: 'any', matchText: '' });
+    setFirstTemplate('');
+    setConnections([]);
+    setViewMode('builder');
+  };
+
+  const editFlow = (flow: Flow) => {
+    setSelectedFlow(flow);
+    setFlowName(flow.name);
+    setTrigger(flow.trigger || { matchType: 'any', matchText: '' });
+    setFirstTemplate(flow.firstTemplate || '');
+    setConnections(flow.connections || []);
+    setViewMode('builder');
+  };
+
+  const deleteFlow = async (flowId: string) => {
+    if (!confirm('Are you sure you want to delete this flow?')) return;
+
     try {
-      const res = await fetch('/api/flows', { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok) {
-        if (data?.message) {
-          setError(data.message);
-        }
-        return;
-      }
-      if (data.flow) {
-        const flow = data.flow;
-        setFlowName(flow.name || 'Default Flow');
-        setConnections(connectionsFromDto(flow.connections || []));
-        setFunctions(flow.functions || []);
+      const res = await fetch(`/api/flows/${flowId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setFlows(flows.filter(f => f._id !== flowId));
+        setSuccess('Flow deleted');
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to delete flow');
       }
     } catch (err: any) {
-      setError(err.message || 'Unable to load flow');
+      setError(err.message || 'Failed to delete flow');
     }
-  };
-
-  const handleConnectionChange = (key: string, value: string) => {
-    if (!value) {
-      setConnections((prev) => {
-        const { [key]: _remove, ...rest } = prev;
-        return rest;
-      });
-      return;
-    }
-
-    const [targetType, target] = value.split('::');
-    if (targetType !== 'template' && targetType !== 'function') {
-      return;
-    }
-
-    setConnections((prev) => {
-      return { ...prev, [key]: { targetType, target } };
-    });
-  };
-
-  const resetConnections = () => {
-    setConnections({});
-  };
-
-  const connectionList = Object.entries(connections).map(([key, target]) => {
-    const [source, button] = key.split('::');
-    return { source, button, target };
-  });
-
-  const connectionsFromDto = (list: FlowConnectionDto[]): ConnectionMap =>
-    list.reduce((acc, conn) => {
-      const key = buildButtonKey(conn.sourceTemplate, { text: conn.button }, 0);
-      acc[key] = { targetType: conn.targetType, target: conn.target };
-      return acc;
-    }, {} as ConnectionMap);
-
-  const connectionsToDto = (): FlowConnectionDto[] =>
-    Object.entries(connections).map(([key, target]) => {
-      const [sourceTemplate, button] = key.split('::');
-      return {
-        sourceTemplate,
-        button,
-        targetType: target.targetType,
-        target: target.target,
-      };
-    });
-
-  const addFunction = () => {
-    const name = functionForm.name.trim();
-    if (!name) {
-      setError('Function name is required.');
-      return;
-    }
-    if (!functionForm.code.trim()) {
-      setError('Function code cannot be empty.');
-      return;
-    }
-    setError(null);
-    setFunctions((prev) => {
-      const filtered = prev.filter((fn) => fn.name !== name);
-      return [
-        ...filtered,
-        {
-          ...functionForm,
-          timeoutMs: Number(functionForm.timeoutMs) || 5000,
-        },
-      ];
-    });
-    setFunctionForm({
-      name: '',
-      description: '',
-      code: defaultFunctionCode,
-      inputKey: 'input',
-      timeoutMs: 5000,
-      nextTemplate: '',
-    });
-  };
-
-  const removeFunction = (name: string) => {
-    setFunctions((prev) => prev.filter((fn) => fn.name !== name));
-    setConnections((prev) => {
-      const next: ConnectionMap = {};
-      Object.entries(prev).forEach(([key, target]) => {
-        if (target.targetType === 'function' && target.target === name) {
-          return;
-        }
-        next[key] = target;
-      });
-      return next;
-    });
   };
 
   const saveFlow = async () => {
-    setSavingFlow(true);
-    setSaveStatus('Saving…');
+    setSaving(true);
     setError(null);
+    setSuccess(null);
+
     try {
       const payload = {
         name: flowName,
-        connections: connectionsToDto(),
-        functions,
+        trigger,
+        firstTemplate,
+        connections,
+        functions: selectedFlow?.functions || [],
       };
-      const res = await fetch('/api/flows', {
-        method: 'POST',
+
+      const url = selectedFlow ? `/api/flows/${selectedFlow._id}` : '/api/flows';
+      const method = selectedFlow ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || 'Failed to save flow');
-      }
-      if (data.flow) {
-        setConnections(connectionsFromDto(data.flow.connections || []));
-        setFunctions(data.flow.functions || []);
-        setFlowName(data.flow.name || flowName);
-      }
-      setSaveStatus('Saved');
+      if (!res.ok) throw new Error(data.message || 'Failed to save flow');
+
+      setSuccess(selectedFlow ? 'Flow updated!' : 'Flow created!');
+      await fetchData();
+      setViewMode('list');
     } catch (err: any) {
-      setError(err.message || 'Unable to save flow');
-      setSaveStatus(null);
+      setError(err.message || 'Failed to save flow');
     } finally {
-      setSavingFlow(false);
+      setSaving(false);
     }
   };
 
-  const testFunction = async () => {
-    setTestError(null);
-    setTestResult(null);
-    if (!testFunctionName) {
-      setTestError('Pick a function to test.');
-      return;
-    }
-    try {
-      const res = await fetch('/api/flows/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: testFunctionName,
-          input: testInput,
-          context: { preview: true },
-        }),
+  const cancelBuilder = () => {
+    setViewMode('list');
+    setSelectedFlow(null);
+  };
+
+  const selectFirstTemplate = (templateName: string) => {
+    setFirstTemplate(templateName);
+    setShowTemplateModal(false);
+  };
+
+  const selectButtonTarget = (targetTemplate: string) => {
+    if (pendingButtonConnection) {
+      const key = `${pendingButtonConnection.sourceTemplate}::${pendingButtonConnection.button}`;
+      setConnections(prev => {
+        const filtered = prev.filter(
+          c => !(c.sourceTemplate === pendingButtonConnection.sourceTemplate &&
+            c.button === pendingButtonConnection.button)
+        );
+        return [...filtered, {
+          sourceTemplate: pendingButtonConnection.sourceTemplate,
+          button: pendingButtonConnection.button,
+          targetType: 'template' as const,
+          target: targetTemplate,
+        }];
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.message || 'Failed to run function');
-      }
-      setTestResult(JSON.stringify(data.result, null, 2));
-    } catch (err: any) {
-      setTestError(err.message || 'Function test failed');
+    }
+    setPendingButtonConnection(null);
+    setShowTemplateModal(false);
+  };
+
+  const getTemplateButtons = (templateName: string): TemplateButton[] => {
+    const template = templates.find(t => t.name === templateName);
+    if (!template) return [];
+    return template.components
+      ?.filter(c => c.type === 'BUTTONS')
+      .flatMap(c => c.buttons || []) || [];
+  };
+
+  const getButtonTarget = (sourceTemplate: string, button: string): string | undefined => {
+    const conn = connections.find(
+      c => c.sourceTemplate === sourceTemplate && c.button === button
+    );
+    return conn?.targetType === 'template' ? conn.target : undefined;
+  };
+
+  const removeConnection = (sourceTemplate: string, button: string) => {
+    setConnections(prev => prev.filter(
+      c => !(c.sourceTemplate === sourceTemplate && c.button === button)
+    ));
+  };
+
+  const getTriggerLabel = (trigger: FlowTrigger | undefined) => {
+    if (!trigger || trigger.matchType === 'any') return 'Any message';
+    const labels: Record<string, string> = {
+      includes: 'includes',
+      starts_with: 'starts with',
+      exact: 'exactly matches',
+    };
+    return `Message ${labels[trigger.matchType]} "${trigger.matchText || ''}"`;
+  };
+
+  // Get function connection for a template (templates without buttons)
+  const getFunctionConnection = (sourceTemplate: string) => {
+    return connections.find(
+      c => c.sourceTemplate === sourceTemplate && c.targetType === 'function' && !c.button
+    );
+  };
+
+  // Remove function connection
+  const removeFunctionConnection = (sourceTemplate: string) => {
+    setConnections(prev => prev.filter(
+      c => !(c.sourceTemplate === sourceTemplate && c.targetType === 'function' && !c.button)
+    ));
+  };
+
+  // Select function for a template
+  const selectFunction = (functionName: string) => {
+    if (pendingFunctionConnection) {
+      // Save the function selection and ask for next template
+      setPendingFunctionNextTemplate({
+        sourceTemplate: pendingFunctionConnection.sourceTemplate,
+        functionName,
+      });
+      setPendingFunctionConnection(null);
+      setShowFunctionModal(false);
+      setShowTemplateModal(true);
     }
   };
 
+  // Select next template after function
+  const selectFunctionNextTemplate = (nextTemplate: string) => {
+    if (pendingFunctionNextTemplate) {
+      setConnections(prev => {
+        const filtered = prev.filter(
+          c => !(c.sourceTemplate === pendingFunctionNextTemplate.sourceTemplate &&
+            c.targetType === 'function' && !c.button)
+        );
+        return [...filtered, {
+          sourceTemplate: pendingFunctionNextTemplate.sourceTemplate,
+          targetType: 'function' as const,
+          target: pendingFunctionNextTemplate.functionName,
+          nextTemplate: nextTemplate,
+        }];
+      });
+    }
+    setPendingFunctionNextTemplate(null);
+    setShowTemplateModal(false);
+  };
+
+  // Render template selection modal
+  const renderTemplateModal = () => (
+    <div className="modal-overlay" onClick={() => {
+      setShowTemplateModal(false);
+      setPendingButtonConnection(null);
+      setPendingFunctionNextTemplate(null);
+    }}>
+      <div className="modal-content template-select-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{pendingFunctionNextTemplate ? 'Select Next Template' : 'Select Template'}</h2>
+          <button className="modal-close" onClick={() => {
+            setShowTemplateModal(false);
+            setPendingButtonConnection(null);
+            setPendingFunctionNextTemplate(null);
+          }}>×</button>
+        </div>
+        <div className="modal-body">
+          <div className="template-select-grid">
+            {templates.filter(t => t.status === 'APPROVED').map(template => (
+              <button
+                key={template.name}
+                className="template-select-item"
+                onClick={() => {
+                  if (pendingFunctionNextTemplate) {
+                    selectFunctionNextTemplate(template.name);
+                  } else if (pendingButtonConnection) {
+                    selectButtonTarget(template.name);
+                  } else {
+                    selectFirstTemplate(template.name);
+                  }
+                }}
+              >
+                <div className="template-select-name">{template.name}</div>
+                <div className="template-select-meta">
+                  <span className="pill small">{template.category}</span>
+                  <span className="pill small">{template.language}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render function selection modal
+  const renderFunctionModal = () => (
+    <div className="modal-overlay" onClick={() => {
+      setShowFunctionModal(false);
+      setPendingFunctionConnection(null);
+    }}>
+      <div className="modal-content template-select-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Select Function</h2>
+          <button className="modal-close" onClick={() => {
+            setShowFunctionModal(false);
+            setPendingFunctionConnection(null);
+          }}>×</button>
+        </div>
+        <div className="modal-body">
+          {functions.length === 0 ? (
+            <div className="empty-state-small">
+              <p>No functions created yet.</p>
+              <Link href="/dashboard/functions" className="btn-primary small">
+                Create Function
+              </Link>
+            </div>
+          ) : (
+            <div className="template-select-grid">
+              {functions.map(fn => (
+                <button
+                  key={fn._id}
+                  className="template-select-item"
+                  onClick={() => selectFunction(fn.name)}
+                >
+                  <div className="template-select-name">⚡ {fn.name}</div>
+                  <div className="template-select-meta">
+                    {fn.description && <span className="muted small">{fn.description}</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render a template node in the flow tree
+  const renderTemplateNode = (templateName: string, depth = 0): JSX.Element => {
+    const buttons = getTemplateButtons(templateName);
+    const functionConnection = getFunctionConnection(templateName);
+
+    return (
+      <div className="flow-template-node" key={`${templateName}-${depth}`}>
+        <div className="flow-node-card">
+          <div className="flow-node-icon">📝</div>
+          <div className="flow-node-content">
+            <div className="flow-node-title">{templateName}</div>
+            <div className="flow-node-subtitle">Template</div>
+          </div>
+        </div>
+
+        {/* Templates with buttons - show button branches */}
+        {buttons.length > 0 && (
+          <div className="flow-button-branches">
+            {buttons.map((button, idx) => {
+              const buttonText = button.text || button.type || `Button ${idx + 1}`;
+              const targetTemplate = getButtonTarget(templateName, buttonText);
+
+              return (
+                <div key={`${templateName}-${buttonText}-${idx}`} className="flow-button-branch">
+                  <div className="flow-branch-line">
+                    <div className="flow-branch-connector" />
+                    <div className="flow-button-label">{buttonText}</div>
+                  </div>
+
+                  {targetTemplate ? (
+                    <div className="flow-branch-content">
+                      <button
+                        className="flow-remove-btn"
+                        onClick={() => removeConnection(templateName, buttonText)}
+                        title="Remove connection"
+                      >
+                        ×
+                      </button>
+                      {renderTemplateNode(targetTemplate, depth + 1)}
+                    </div>
+                  ) : (
+                    <button
+                      className="flow-add-node-btn"
+                      onClick={() => {
+                        setPendingButtonConnection({ sourceTemplate: templateName, button: buttonText });
+                        setShowTemplateModal(true);
+                      }}
+                    >
+                      <span className="plus-icon">+</span>
+                      <span>Add template</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Templates without buttons - show function connection option */}
+        {buttons.length === 0 && (
+          <div className="flow-function-connection">
+            <div className="flow-branch-connector" />
+
+            {functionConnection ? (
+              <div className="flow-function-chain">
+                <div className="flow-branch-content">
+                  <button
+                    className="flow-remove-btn"
+                    onClick={() => removeFunctionConnection(templateName)}
+                    title="Remove connection"
+                  >
+                    ×
+                  </button>
+                  <div className="flow-node-card function">
+                    <div className="flow-node-icon">⚡</div>
+                    <div className="flow-node-content">
+                      <div className="flow-node-title">{functionConnection.target}</div>
+                      <div className="flow-node-subtitle">Function</div>
+                    </div>
+                  </div>
+                </div>
+
+                {functionConnection.nextTemplate && (
+                  <>
+                    <div className="flow-branch-connector" />
+                    {renderTemplateNode(functionConnection.nextTemplate, depth + 1)}
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                className="flow-add-node-btn"
+                onClick={() => {
+                  setPendingFunctionConnection({ sourceTemplate: templateName });
+                  setShowFunctionModal(true);
+                }}
+              >
+                <span className="plus-icon">+</span>
+                <span>Add function</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // No WhatsApp account connected
   if (!hasWhatsAppAccount) {
     return (
       <main className="dashboard-container">
@@ -374,12 +537,12 @@ export default function FlowBuilderClient({
             <header className="dashboard-header">
               <div>
                 <h1>Flow Builder</h1>
-                <p className="lead">Signed in as {userEmail}</p>
+                <p className="lead">Create automated conversation flows</p>
               </div>
             </header>
             <div className="card setup-prompt">
               <h2>Connect WhatsApp first</h2>
-              <p>Configure your WhatsApp Cloud API credentials to pull templates.</p>
+              <p>Configure your WhatsApp Cloud API credentials to create flows.</p>
               <Link href="/dashboard/settings" className="btn-primary">
                 Go to Settings →
               </Link>
@@ -390,6 +553,134 @@ export default function FlowBuilderClient({
     );
   }
 
+  // Flow Builder View
+  if (viewMode === 'builder') {
+    return (
+      <main className="dashboard-container">
+        <div className="dashboard-body">
+          <DashboardSidebar userEmail={userEmail} />
+          <div className="dashboard-content">
+            <header className="dashboard-header">
+              <div>
+                <h1>{selectedFlow ? 'Edit Flow' : 'Create Flow'}</h1>
+                <p className="lead">Configure trigger and template chain</p>
+              </div>
+              <div className="header-actions">
+                <button className="ghost-btn" onClick={cancelBuilder}>
+                  Cancel
+                </button>
+                <button className="btn-primary" onClick={saveFlow} disabled={saving}>
+                  {saving ? 'Saving…' : selectedFlow ? 'Update Flow' : 'Create Flow'}
+                </button>
+              </div>
+            </header>
+
+            {error && <div className="status error">{error}</div>}
+            {success && <div className="status success">{success}</div>}
+
+            <div className="flow-builder-workspace">
+              {/* Flow Name */}
+              <div className="flow-name-input">
+                <label>Flow Name</label>
+                <input
+                  value={flowName}
+                  onChange={e => setFlowName(e.target.value)}
+                  placeholder="Enter flow name"
+                />
+              </div>
+
+              {/* Flow Canvas */}
+              <div className="flow-canvas">
+                {/* Trigger Node */}
+                <div className="flow-trigger-node">
+                  <div className="flow-node-card trigger">
+                    <div className="flow-node-icon">📨</div>
+                    <div className="flow-node-content">
+                      <div className="flow-node-title">Trigger</div>
+                      <div className="flow-node-subtitle">When a message arrives</div>
+                    </div>
+                  </div>
+
+                  <div className="trigger-config">
+                    <div className="trigger-options">
+                      <label className="trigger-option">
+                        <input
+                          type="radio"
+                          name="triggerType"
+                          checked={trigger.matchType === 'any'}
+                          onChange={() => setTrigger({ matchType: 'any', matchText: '' })}
+                        />
+                        <span>Any message</span>
+                      </label>
+                      <label className="trigger-option">
+                        <input
+                          type="radio"
+                          name="triggerType"
+                          checked={trigger.matchType !== 'any'}
+                          onChange={() => setTrigger({ matchType: 'includes', matchText: '' })}
+                        />
+                        <span>Filter messages</span>
+                      </label>
+                    </div>
+
+                    {trigger.matchType !== 'any' && (
+                      <div className="trigger-filter">
+                        <input
+                          value={trigger.matchText}
+                          onChange={e => setTrigger({ ...trigger, matchText: e.target.value })}
+                          placeholder="Enter text to match"
+                        />
+                        <select
+                          value={trigger.matchType}
+                          onChange={e => setTrigger({ ...trigger, matchType: e.target.value as TriggerMatchType })}
+                        >
+                          <option value="includes">includes</option>
+                          <option value="starts_with">starts with</option>
+                          <option value="exact">exact match</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flow-connector-line" />
+
+                {/* First Template or Add Button */}
+                {firstTemplate ? (
+                  <div className="flow-tree">
+                    <button
+                      className="flow-remove-first-btn"
+                      onClick={() => {
+                        setFirstTemplate('');
+                        setConnections([]);
+                      }}
+                      title="Remove template"
+                    >
+                      ×
+                    </button>
+                    {renderTemplateNode(firstTemplate)}
+                  </div>
+                ) : (
+                  <button
+                    className="flow-add-node-btn large"
+                    onClick={() => setShowTemplateModal(true)}
+                  >
+                    <span className="plus-icon">+</span>
+                    <span>Add first template</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showTemplateModal && renderTemplateModal()}
+            {showFunctionModal && renderFunctionModal()}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Flow List View (Default)
   return (
     <main className="dashboard-container">
       <div className="dashboard-body">
@@ -398,184 +689,61 @@ export default function FlowBuilderClient({
           <header className="dashboard-header">
             <div>
               <h1>Flow Builder</h1>
-              <p className="lead">Signed in as {userEmail}</p>
+              <p className="lead">Create automated conversation flows</p>
             </div>
+            <button className="btn-primary" onClick={createNewFlow}>
+              + Create Flow
+            </button>
           </header>
 
-          <div className="builder-actions">
-            <div className="pill">
-              {loading ? 'Loading templates…' : `${templates.length} templates`}
-            </div>
-            <div className="builder-action-buttons">
-              <input
-                value={flowName}
-                onChange={(e) => setFlowName(e.target.value)}
-                placeholder="Flow name"
-                className="small-input"
-              />
-              <button className="ghost-btn" onClick={fetchTemplates} disabled={loading}>
-                Refresh
-              </button>
-              <button className="ghost-btn" onClick={resetConnections} disabled={!connectionList.length}>
-                Clear links
-              </button>
-              <button className="btn-primary" onClick={saveFlow} disabled={savingFlow}>
-                {savingFlow ? 'Saving…' : 'Save flow'}
+          {error && <div className="status error">{error}</div>}
+          {success && <div className="status success">{success}</div>}
+
+          {loading ? (
+            <div className="loading-state">Loading flows...</div>
+          ) : flows.length === 0 ? (
+            <div className="empty-state-hero">
+              <div className="empty-state-icon">🔀</div>
+              <h2>No flows yet</h2>
+              <p>Create your first automated conversation flow to respond to customer messages.</p>
+              <button className="btn-primary" onClick={createNewFlow}>
+                + Create Your First Flow
               </button>
             </div>
-          </div>
-
-          <div className="flow-builder">
-            <section className="flow-column template-column">
-              <div className="column-header">
-                <h2>Templates</h2>
-                <p className="muted">Map quick-reply buttons to next steps.</p>
-              </div>
-
-              {error && <div className="status error">{error}</div>}
-
-              {loading ? (
-                <div className="loading-templates">Loading templates…</div>
-              ) : templates.length === 0 ? (
-                <div className="empty-state">
-                  <p>No templates found for this account.</p>
-                  <span className="muted">
-                    Create templates in Meta and refresh to see them here.
-                  </span>
+          ) : (
+            <div className="flows-grid">
+              {flows.map(flow => (
+                <div key={flow._id} className="flow-card card">
+                  <div className="flow-card-header">
+                    <div className="flow-card-name">{flow.name}</div>
+                    <div className="flow-card-actions">
+                      <button className="ghost-btn small" onClick={() => editFlow(flow)}>
+                        Edit
+                      </button>
+                      <button className="ghost-btn small danger" onClick={() => deleteFlow(flow._id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flow-card-trigger">
+                    <span className="flow-trigger-badge">
+                      📨 {getTriggerLabel(flow.trigger)}
+                    </span>
+                  </div>
+                  {flow.firstTemplate && (
+                    <div className="flow-card-first-template">
+                      <span className="muted">First template:</span> {flow.firstTemplate}
+                    </div>
+                  )}
+                  <div className="flow-card-meta muted small-text">
+                    Updated {new Date(flow.updatedAt).toLocaleDateString()}
+                  </div>
                 </div>
-              ) : (
-                <div className="template-grid">
-                  {templates.map((template) => {
-                    const bodyText = readBodyText(template.components);
-                    const buttons = extractButtons(template.components);
-
-                    return (
-                      <div key={template.name} className="template-card card">
-                        <div className="template-card-header">
-                          <div>
-                            <div className="template-name">{template.name}</div>
-                            <div className="template-meta">
-                              <span className="pill small">{template.category}</span>
-                              <span className="pill small">{template.language}</span>
-                            </div>
-                          </div>
-                          <span
-                            className={`status-indicator ${template.status === 'APPROVED' ? 'connected' : 'disconnected'}`}
-                          >
-                            <span className="status-dot" />
-                            {template.status.toLowerCase()}
-                          </span>
-                        </div>
-
-                        {bodyText && (
-                          <pre className="template-body" aria-label="Template body">
-                            {bodyText}
-                          </pre>
-                        )}
-
-                        {buttons.length > 0 ? (
-                          <div className="button-links">
-                            <div className="button-links-title">Buttons</div>
-                            {buttons.map((button, index) => {
-                              const key = buildButtonKey(template.name, button, index);
-                              const selected = connections[key];
-                              const value = selected ? `${selected.targetType}::${selected.target}` : '';
-                              return (
-                                <div key={key} className="button-link-row">
-                                  <div className="button-chip">
-                                    {button.text || button.type || 'Button'}
-                                  </div>
-                                  <select
-                                    value={value}
-                                    onChange={(e) => handleConnectionChange(key, e.target.value)}
-                                  >
-                                    <option value="">Not connected</option>
-                                    {templates
-                                      .filter((t) => t.name !== template.name)
-                                      .map((t) => (
-                                        <option key={t.name} value={`template::${t.name}`}>
-                                          {t.name}
-                                        </option>
-                                      ))}
-                                    {functions.map((fn) => (
-                                      <option key={fn.name} value={`function::${fn.name}`}>
-                                        Function: {fn.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="muted small-text">No buttons in this template.</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section className="flow-column connections-column card">
-              <div className="column-header">
-                <h2>Connections</h2>
-                <p className="muted">Visual map of how buttons route to templates.</p>
-              </div>
-
-              {connectionList.length === 0 ? (
-                <div className="empty-state">
-                  <p>No connections yet</p>
-                  <span className="muted">Select a target template for any button to create a link.</span>
-                </div>
-              ) : (
-                <div className="connections-board">
-                  {connectionList.map((conn) => {
-                    const functionTarget = functions.find((fn) => fn.name === conn.target.target);
-                    return (
-                      <div key={`${conn.source}-${conn.button}`} className="connection-card vertical">
-                        <div className="flow-node">
-                          <div className="node-title">{conn.source}</div>
-                          <div className="node-subtitle">button: {conn.button}</div>
-                        </div>
-                        <div className="flow-arrow vertical">↓</div>
-                        {conn.target.targetType === 'function' ? (
-                          <>
-                            <div className="flow-node target">
-                              <div className="node-title">fn: {conn.target.target}</div>
-                              <div className="node-subtitle">runs with input</div>
-                            </div>
-                            {functionTarget?.nextTemplate ? (
-                              <>
-                                <div className="flow-arrow vertical">↓</div>
-                                <div className="flow-node target">
-                                  <div className="node-title">{functionTarget.nextTemplate}</div>
-                                  <div className="node-subtitle">next template</div>
-                                </div>
-                              </>
-                            ) : null}
-                          </>
-                        ) : (
-                          <div className="flow-node target">
-                            <div className="node-title">{conn.target.target}</div>
-                            <div className="node-subtitle">opens on reply</div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-
-          </div>
-
-          {saveStatus && <div className="status success">{saveStatus}</div>}
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </main>
   );
 }
-
-

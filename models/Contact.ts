@@ -27,10 +27,24 @@ const ContactSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  // Flow state tracking
+  lastSentTemplate: {
+    type: String,
+    default: '',
+  },
+  lastSentFlowId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Flow',
+  },
 }, { timestamps: true });
 
 // Compound index: each user can have one contact per waId
 ContactSchema.index({ userId: 1, waId: 1 }, { unique: true });
 
-export default mongoose.models.Contact || mongoose.model('Contact', ContactSchema);
+// Delete cached model in development to ensure schema changes are picked up
+if (mongoose.models.Contact) {
+  delete mongoose.models.Contact;
+}
+
+export default mongoose.model('Contact', ContactSchema);
 
