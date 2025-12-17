@@ -25,9 +25,9 @@ body {
     #0b1021;
   color: var(--text);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
 }
 
 a {
@@ -35,9 +35,17 @@ a {
   text-decoration: none;
 }
 
-/* Auth container (login/signup) */
+/* Auth pages (login/signup) should still center */
+body.auth-page {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* Auth container (login/signup) - centers itself when not in dashboard */
 .container {
   width: min(440px, 100%);
+  margin: auto;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), transparent);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 16px;
@@ -199,12 +207,12 @@ button:disabled {
 /* Dashboard styles */
 .dashboard-container {
   width: 100%;
-  max-width: 1200px;
-  height: calc(100vh - 48px);
-  max-height: calc(100vh - 48px);
+  height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 16px;
 }
 
 .dashboard-body {
@@ -2325,8 +2333,9 @@ button:disabled {
   }
 
   .dashboard-container {
-    height: calc(100vh - 32px);
-    max-height: calc(100vh - 32px);
+    height: 100vh;
+    max-height: 100vh;
+    padding: 12px;
   }
 
   .dashboard-header {
