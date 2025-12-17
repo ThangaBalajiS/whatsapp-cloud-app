@@ -10,7 +10,7 @@ export type FlowTrigger = {
 export type FlowConnection = {
   sourceTemplate: string;
   button?: string; // Optional - not needed for function connections
-  targetType: 'template' | 'function';
+  targetType: 'template' | 'function' | 'custom_message';
   target: string;
   nextTemplate?: string; // For function connections: template to send after function executes
 };
@@ -43,7 +43,7 @@ const ConnectionSchema = new mongoose.Schema<FlowConnection>(
     targetType: {
       type: String,
       required: true,
-      enum: ['template', 'function'],
+      enum: ['template', 'function', 'custom_message'],
     },
     target: { type: String, required: true },
     nextTemplate: { type: String, default: '' }, // Template after function execution

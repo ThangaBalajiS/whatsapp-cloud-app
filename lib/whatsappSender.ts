@@ -150,3 +150,105 @@ export async function sendWhatsAppText(options: {
         };
     }
 }
+
+export type CustomMessageButton = {
+    type: 'quick_reply' | 'url' | 'call';
+    text: string;
+    payload?: string;
+    url?: string;
+    phone?: string;
+};
+
+export type SendCustomMessageOptions = {
+    phoneNumberId: string;
+    accessToken: string; // encrypted
+    recipientPhone: string;
+    content: string;
+    buttons?: CustomMessageButton[];
+};
+
+/**
+ * Send a custom message (interactive message with optional buttons)
+ */
+export async function sendWhatsAppCustomMessage({
+    phoneNumberId,
+    accessToken,
+    recipientPhone,
+    content,
+    buttons = [],
+}: SendCustomMessageOptions): Promise<SendTemplateResult> {
+    try {
+        const decryptedToken = decrypt(accessToken);
+
+        // If no buttons, send as plain text
+        if (buttons.length === 0) {
+            return sendWhatsAppText({
+                phoneNumberId,
+                accessToken,
+                recipientPhone,
+                message: content,
+            });
+        }
+
+        // With buttons, send as interactive message
+        const interactiveButtons = buttons
+            .filter(btn => btn.type === 'quick_reply')
+            .slice(0, 3) // Max 3 buttons
+            .map((btn, index) => ({
+                type: 'reply',
+                reply: {
+                    id: btn.payload || `btn_${index}`,
+                    title: btn.text.substring(0, 20), // Max 20 chars
+                },
+            }));
+
+        const payload = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: recipientPhone,
+            type: 'interactive',
+            interactive: {
+                type: 'button',
+                body: {
+                    text: content,
+                },
+                action: {
+                    buttons: interactiveButtons,
+                },
+            },
+        };
+
+        const response = await fetch(
+            `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${decryptedToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('WhatsApp custom message send error:', data);
+            return {
+                success: false,
+                error: data.error?.message || 'Failed to send custom message',
+            };
+        }
+
+        return {
+            success: true,
+            messageId: data.messages?.[0]?.id,
+        };
+    } catch (error: any) {
+        console.error('WhatsApp custom message send exception:', error);
+        return {
+            success: false,
+            error: error.message || 'Unexpected error sending custom message',
+        };
+    }
+}

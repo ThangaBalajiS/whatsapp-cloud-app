@@ -5,9 +5,10 @@ import Contact from '../../../../../models/Contact';
 import Message from '../../../../../models/Message';
 import { eventEmitter } from '../../../../../lib/eventEmitter';
 import { findMatchingFlow, resolveConnection } from '../../../../../lib/flowEngine';
-import { sendWhatsAppTemplate } from '../../../../../lib/whatsappSender';
+import { sendWhatsAppTemplate, sendWhatsAppCustomMessage } from '../../../../../lib/whatsappSender';
 import Flow from '../../../../../models/Flow';
 import Function from '../../../../../models/Function';
+import CustomMessage from '../../../../../models/CustomMessage';
 import { runUserFunction } from '../../../../../lib/functionRunner';
 
 // GET - Webhook verification (Meta sends this to verify the endpoint)
@@ -312,6 +313,57 @@ async function processFlowForMessage({
     return result;
   };
 
+  // Helper to send custom message and track state
+  const sendCustomMessageAndTrack = async (customMessageName: string, flowId?: string) => {
+    // Extract actual name from "custom:MessageName" format
+    const actualName = customMessageName.startsWith('custom:')
+      ? customMessageName.replace('custom:', '')
+      : customMessageName;
+
+    // Look up the custom message from database
+    const customMsg = await CustomMessage.findOne({ userId, name: actualName });
+    if (!customMsg) {
+      console.error(`[Flow] Custom message "${actualName}" not found`);
+      return { success: false, error: `Custom message "${actualName}" not found` };
+    }
+
+    const result = await sendWhatsAppCustomMessage({
+      phoneNumberId: account.phoneNumberId,
+      accessToken: account.accessToken,
+      recipientPhone: contact.waId,
+      content: customMsg.content,
+      buttons: customMsg.buttons,
+    });
+
+    if (result.success) {
+      console.log(`[Flow] Sent custom message "${actualName}" to ${contact.waId}`);
+
+      // Track last sent template for function processing
+      await Contact.findByIdAndUpdate(contact._id, {
+        lastSentTemplate: customMessageName, // Keep the custom: prefix for tracking
+        lastSentFlowId: flowId || null,
+      });
+      console.log(`[Flow] Updated contact tracking - lastSentTemplate: "${customMessageName}", flowId: "${flowId}"`);
+
+      // Save outgoing message
+      await Message.create({
+        userId,
+        contactId: contact._id,
+        waMessageId: result.messageId || `custom_${Date.now()}`,
+        direction: 'outgoing',
+        type: 'text',
+        content: customMsg.content,
+        timestamp: new Date(),
+        status: 'sent',
+        isRead: true,
+      });
+    } else {
+      console.error(`[Flow] Failed to send custom message: ${result.error}`);
+    }
+
+    return result;
+  };
+
   // If it's a button reply, look for the flow connection
   if (isButtonReply && buttonPayload) {
     const flows = await Flow.find({ userId });
@@ -321,10 +373,16 @@ async function processFlowForMessage({
         (conn: any) => conn.button === buttonPayload || conn.button === messageText
       );
 
-      if (connection && connection.targetType === 'template') {
-        console.log(`[Flow] Button "${buttonPayload}" triggered template: ${connection.target}`);
-        await sendTemplateAndTrack(connection.target, flow._id.toString());
-        return;
+      if (connection) {
+        if (connection.targetType === 'template') {
+          console.log(`[Flow] Button "${buttonPayload}" triggered template: ${connection.target}`);
+          await sendTemplateAndTrack(connection.target, flow._id.toString());
+          return;
+        } else if (connection.targetType === 'custom_message') {
+          console.log(`[Flow] Button "${buttonPayload}" triggered custom message: ${connection.target}`);
+          await sendCustomMessageAndTrack(connection.target, flow._id.toString());
+          return;
+        }
       }
     }
   }
@@ -398,8 +456,15 @@ async function processFlowForMessage({
   } : 'No matching flow found');
 
   if (matchingFlow && matchingFlow.firstTemplate) {
-    console.log(`[Flow] Message matched flow "${matchingFlow.name}", sending first template: ${matchingFlow.firstTemplate}`);
-    await sendTemplateAndTrack(matchingFlow.firstTemplate, matchingFlow._id.toString());
+    const firstTemplate = matchingFlow.firstTemplate;
+    console.log(`[Flow] Message matched flow "${matchingFlow.name}", sending first message: ${firstTemplate}`);
+
+    // Check if first message is a custom message (prefixed with "custom:")
+    if (firstTemplate.startsWith('custom:')) {
+      await sendCustomMessageAndTrack(firstTemplate, matchingFlow._id.toString());
+    } else {
+      await sendTemplateAndTrack(firstTemplate, matchingFlow._id.toString());
+    }
   }
 }
 

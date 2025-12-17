@@ -12,6 +12,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { label: 'Inbox', href: '/dashboard' },
   { label: 'Flow Builder', href: '/dashboard/flows' },
+  { label: 'Custom Messages', href: '/dashboard/custom-messages' },
   { label: 'Functions', href: '/dashboard/functions' },
   { label: 'Settings', href: '/dashboard/settings' },
 ];

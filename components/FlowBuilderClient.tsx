@@ -35,9 +35,17 @@ type Template = {
 type FlowConnection = {
   sourceTemplate: string;
   button?: string;
-  targetType: 'template' | 'function';
+  targetType: 'template' | 'function' | 'custom_message';
   target: string;
   nextTemplate?: string;
+};
+
+type CustomMessage = {
+  _id: string;
+  name: string;
+  content: string;
+  buttons: { type: string; text: string; payload?: string; url?: string; phone?: string }[];
+  placeholders: string[];
 };
 
 type FlowFunction = {
@@ -82,6 +90,7 @@ export default function FlowBuilderClient({
 }: Props) {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [customMessages, setCustomMessages] = useState<CustomMessage[]>([]);
   const [functions, setFunctions] = useState<FlowFunction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +110,7 @@ export default function FlowBuilderClient({
   // Modal states
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showFunctionModal, setShowFunctionModal] = useState(false);
+  const [pickerTab, setPickerTab] = useState<'templates' | 'custom'>('templates');
   const [pendingButtonConnection, setPendingButtonConnection] = useState<{
     sourceTemplate: string;
     button: string;
@@ -125,9 +135,10 @@ export default function FlowBuilderClient({
     setLoading(true);
     setError(null);
     try {
-      const [flowsRes, templatesRes, functionsRes] = await Promise.all([
+      const [flowsRes, templatesRes, customMsgRes, functionsRes] = await Promise.all([
         fetch('/api/flows'),
         fetch('/api/whatsapp/templates'),
+        fetch('/api/custom-messages'),
         fetch('/api/functions'),
       ]);
 
@@ -139,6 +150,11 @@ export default function FlowBuilderClient({
       const templatesData = await templatesRes.json();
       if (templatesRes.ok) {
         setTemplates(templatesData.templates || []);
+      }
+
+      const customMsgData = await customMsgRes.json();
+      if (customMsgRes.ok) {
+        setCustomMessages(customMsgData.messages || []);
       }
 
       const functionsData = await functionsRes.json();
@@ -254,6 +270,21 @@ export default function FlowBuilderClient({
   };
 
   const getTemplateButtons = (templateName: string): TemplateButton[] => {
+    // Check if it's a custom message (prefixed with "custom:")
+    if (templateName.startsWith('custom:')) {
+      const customMsgName = templateName.replace('custom:', '');
+      const customMsg = customMessages.find(m => m.name === customMsgName);
+      if (customMsg && customMsg.buttons.length > 0) {
+        // Convert custom message buttons to TemplateButton format
+        return customMsg.buttons.map(btn => ({
+          type: btn.type === 'quick_reply' ? 'QUICK_REPLY' : btn.type,
+          text: btn.text,
+        }));
+      }
+      return [];
+    }
+
+    // Regular WhatsApp template
     const template = templates.find(t => t.name === templateName);
     if (!template) return [];
     return template.components
@@ -265,7 +296,8 @@ export default function FlowBuilderClient({
     const conn = connections.find(
       c => c.sourceTemplate === sourceTemplate && c.button === button
     );
-    return conn?.targetType === 'template' ? conn.target : undefined;
+    // Return target for both template and custom_message types
+    return (conn?.targetType === 'template' || conn?.targetType === 'custom_message') ? conn.target : undefined;
   };
 
   const removeConnection = (sourceTemplate: string, button: string) => {
@@ -332,50 +364,128 @@ export default function FlowBuilderClient({
     setShowTemplateModal(false);
   };
 
-  // Render template selection modal
-  const renderTemplateModal = () => (
-    <div className="modal-overlay" onClick={() => {
-      setShowTemplateModal(false);
-      setPendingButtonConnection(null);
-      setPendingFunctionNextTemplate(null);
-    }}>
-      <div className="modal-content template-select-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{pendingFunctionNextTemplate ? 'Select Next Template' : 'Select Template'}</h2>
-          <button className="modal-close" onClick={() => {
-            setShowTemplateModal(false);
-            setPendingButtonConnection(null);
-            setPendingFunctionNextTemplate(null);
-          }}>×</button>
-        </div>
-        <div className="modal-body">
-          <div className="template-select-grid">
-            {templates.filter(t => t.status === 'APPROVED').map(template => (
-              <button
-                key={template.name}
-                className="template-select-item"
-                onClick={() => {
-                  if (pendingFunctionNextTemplate) {
-                    selectFunctionNextTemplate(template.name);
-                  } else if (pendingButtonConnection) {
-                    selectButtonTarget(template.name);
-                  } else {
-                    selectFirstTemplate(template.name);
-                  }
-                }}
-              >
-                <div className="template-select-name">{template.name}</div>
-                <div className="template-select-meta">
-                  <span className="pill small">{template.category}</span>
-                  <span className="pill small">{template.language}</span>
-                </div>
-              </button>
-            ))}
+  // Render template selection modal with tabs
+  const renderTemplateModal = () => {
+    const handleSelectItem = (name: string, type: 'template' | 'custom_message') => {
+      // For custom messages, always use the prefixed name for consistency
+      const targetName = type === 'custom_message' ? `custom:${name}` : name;
+
+      if (pendingFunctionNextTemplate) {
+        selectFunctionNextTemplate(targetName);
+      } else if (pendingButtonConnection) {
+        // For button connections, store with the prefixed name
+        const conn: FlowConnection = {
+          sourceTemplate: pendingButtonConnection.sourceTemplate,
+          button: pendingButtonConnection.button,
+          targetType: type === 'custom_message' ? 'custom_message' : 'template',
+          target: targetName,
+        };
+        setConnections(prev => [...prev.filter(c =>
+          c.sourceTemplate !== pendingButtonConnection.sourceTemplate ||
+          c.button !== pendingButtonConnection.button
+        ), conn]);
+        setPendingButtonConnection(null);
+        setShowTemplateModal(false);
+      } else {
+        // First template/message
+        setFirstTemplate(targetName);
+        setShowTemplateModal(false);
+      }
+    };
+
+    return (
+      <div className="modal-overlay" onClick={() => {
+        setShowTemplateModal(false);
+        setPendingButtonConnection(null);
+        setPendingFunctionNextTemplate(null);
+        setPickerTab('templates');
+      }}>
+        <div className="modal-content template-select-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>{pendingFunctionNextTemplate ? 'Select Next Message' : 'Select Message'}</h2>
+            <button className="modal-close" onClick={() => {
+              setShowTemplateModal(false);
+              setPendingButtonConnection(null);
+              setPendingFunctionNextTemplate(null);
+              setPickerTab('templates');
+            }}>×</button>
+          </div>
+          <div className="picker-tabs">
+            <button
+              className={`picker-tab ${pickerTab === 'templates' ? 'active' : ''}`}
+              onClick={() => setPickerTab('templates')}
+            >
+              📋 Templates
+            </button>
+            <button
+              className={`picker-tab ${pickerTab === 'custom' ? 'active' : ''}`}
+              onClick={() => setPickerTab('custom')}
+            >
+              💬 Custom Messages
+            </button>
+          </div>
+          <div className="modal-body">
+            {pickerTab === 'templates' ? (
+              <div className="template-select-grid">
+                {templates.filter(t => t.status === 'APPROVED').length === 0 ? (
+                  <div className="empty-state-small">
+                    <p>No approved templates found.</p>
+                    <span className="muted small-text">Create templates in your WhatsApp Business Manager.</span>
+                  </div>
+                ) : (
+                  templates.filter(t => t.status === 'APPROVED').map(template => (
+                    <button
+                      key={template.name}
+                      className="template-select-item"
+                      onClick={() => handleSelectItem(template.name, 'template')}
+                    >
+                      <div className="template-select-name">📋 {template.name}</div>
+                      <div className="template-select-meta">
+                        <span className="pill small">{template.category}</span>
+                        <span className="pill small">{template.language}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="template-select-grid">
+                {customMessages.length === 0 ? (
+                  <div className="empty-state-small">
+                    <p>No custom messages created yet.</p>
+                    <Link href="/dashboard/custom-messages" className="btn-primary small">
+                      Create Custom Message
+                    </Link>
+                  </div>
+                ) : (
+                  customMessages.map(msg => (
+                    <button
+                      key={msg._id}
+                      className="template-select-item"
+                      onClick={() => handleSelectItem(msg.name, 'custom_message')}
+                    >
+                      <div className="template-select-name">💬 {msg.name}</div>
+                      <div className="template-select-meta">
+                        {msg.placeholders.length > 0 && (
+                          <span className="pill small">{msg.placeholders.length} placeholder{msg.placeholders.length !== 1 ? 's' : ''}</span>
+                        )}
+                        {msg.buttons.length > 0 && (
+                          <span className="pill small">{msg.buttons.length} button{msg.buttons.length !== 1 ? 's' : ''}</span>
+                        )}
+                      </div>
+                      <div className="template-select-preview muted small-text">
+                        {msg.content.length > 60 ? msg.content.substring(0, 60) + '...' : msg.content}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Render function selection modal
   const renderFunctionModal = () => (
@@ -424,14 +534,16 @@ export default function FlowBuilderClient({
   const renderTemplateNode = (templateName: string, depth = 0): JSX.Element => {
     const buttons = getTemplateButtons(templateName);
     const functionConnection = getFunctionConnection(templateName);
+    const isCustomMessage = templateName.startsWith('custom:');
+    const displayName = isCustomMessage ? templateName.replace('custom:', '') : templateName;
 
     return (
       <div className="flow-template-node" key={`${templateName}-${depth}`}>
         <div className="flow-node-card">
-          <div className="flow-node-icon">📝</div>
+          <div className="flow-node-icon">{isCustomMessage ? '💬' : '📋'}</div>
           <div className="flow-node-content">
-            <div className="flow-node-title">{templateName}</div>
-            <div className="flow-node-subtitle">Template</div>
+            <div className="flow-node-title">{displayName}</div>
+            <div className="flow-node-subtitle">{isCustomMessage ? 'Custom Message' : 'Template'}</div>
           </div>
         </div>
 
