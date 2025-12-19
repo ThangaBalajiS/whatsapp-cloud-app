@@ -12,6 +12,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { label: 'Inbox', href: '/dashboard' },
   { label: 'Flow Builder', href: '/dashboard/flows' },
+  { label: 'Custom Messages', href: '/dashboard/custom-messages' },
   { label: 'Functions', href: '/dashboard/functions' },
   { label: 'Settings', href: '/dashboard/settings' },
 ];
@@ -44,7 +45,6 @@ export function DashboardSidebar({ userEmail }: { userEmail?: string }) {
               className={`sidebar-link ${isActive(item.href) ? 'active' : ''}`}
             >
               <span>{item.label}</span>
-              {isActive(item.href) ? <span className="sidebar-pill">Now</span> : null}
             </Link>
           ))}
         </nav>

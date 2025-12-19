@@ -4,6 +4,12 @@ import WhatsAppAccount from '../../../../../models/WhatsAppAccount';
 import Contact from '../../../../../models/Contact';
 import Message from '../../../../../models/Message';
 import { eventEmitter } from '../../../../../lib/eventEmitter';
+import { findMatchingFlow, resolveConnection } from '../../../../../lib/flowEngine';
+import { sendWhatsAppTemplate, sendWhatsAppCustomMessage } from '../../../../../lib/whatsappSender';
+import Flow from '../../../../../models/Flow';
+import Function from '../../../../../models/Function';
+import CustomMessage from '../../../../../models/CustomMessage';
+import { runUserFunction } from '../../../../../lib/functionRunner';
 
 // GET - Webhook verification (Meta sends this to verify the endpoint)
 export async function GET(
@@ -90,7 +96,7 @@ export async function POST(
     if (messages && messages.length > 0) {
       for (const msg of messages) {
         const contactInfo = contacts?.find((c: any) => c.wa_id === msg.from);
-        
+
         // Find or create contact
         let contact = await Contact.findOne({
           userId: params.userId,
@@ -115,10 +121,30 @@ export async function POST(
         let type = 'text';
         let content = '';
         let mediaUrl = '';
+        let buttonPayload: string | null = null;
+        let isButtonReply = false;
 
         if (msg.type === 'text') {
           type = 'text';
           content = msg.text?.body || '';
+        } else if (msg.type === 'button') {
+          // Quick reply button response
+          type = 'text';
+          content = msg.button?.text || '';
+          buttonPayload = msg.button?.payload || msg.button?.text || '';
+          isButtonReply = true;
+        } else if (msg.type === 'interactive') {
+          // Interactive message response (list or button)
+          type = 'text';
+          if (msg.interactive?.type === 'button_reply') {
+            content = msg.interactive.button_reply?.title || '';
+            buttonPayload = msg.interactive.button_reply?.id || msg.interactive.button_reply?.title || '';
+            isButtonReply = true;
+          } else if (msg.interactive?.type === 'list_reply') {
+            content = msg.interactive.list_reply?.title || '';
+            buttonPayload = msg.interactive.list_reply?.id || '';
+            isButtonReply = true;
+          }
         } else if (msg.type === 'image') {
           type = 'image';
           content = msg.image?.caption || '[Image]';
@@ -149,7 +175,7 @@ export async function POST(
 
         // Check if message already exists (prevent duplicates)
         const existingMessage = await Message.findOne({ waMessageId: msg.id });
-        
+
         if (!existingMessage) {
           const newMessage = await Message.create({
             userId: params.userId,
@@ -189,6 +215,21 @@ export async function POST(
               isNew: isNewContact,
             },
           });
+
+          // ==== FLOW PROCESSING ====
+          try {
+            await processFlowForMessage({
+              userId: params.userId,
+              account,
+              contact,
+              messageText: content,
+              buttonPayload,
+              isButtonReply,
+            });
+          } catch (flowError) {
+            console.error('Flow processing error:', flowError);
+            // Don't fail the webhook if flow processing fails
+          }
         }
       }
     }
@@ -217,3 +258,219 @@ export async function POST(
     return NextResponse.json({ message: 'OK' }, { status: 200 });
   }
 }
+
+// Process flow logic for incoming messages
+async function processFlowForMessage({
+  userId,
+  account,
+  contact,
+  messageText,
+  buttonPayload,
+  isButtonReply,
+}: {
+  userId: string;
+  account: any;
+  contact: any;
+  messageText: string;
+  buttonPayload: string | null;
+  isButtonReply: boolean;
+}) {
+  // Helper to send template and track state
+  const sendTemplateAndTrack = async (templateName: string, flowId?: string) => {
+    const result = await sendWhatsAppTemplate({
+      phoneNumberId: account.phoneNumberId,
+      accessToken: account.accessToken,
+      recipientPhone: contact.waId,
+      templateName,
+    });
+
+    if (result.success) {
+      console.log(`[Flow] Sent template "${templateName}" to ${contact.waId}`);
+
+      // Track last sent template for function processing using findByIdAndUpdate
+      await Contact.findByIdAndUpdate(contact._id, {
+        lastSentTemplate: templateName,
+        lastSentFlowId: flowId || null,
+      });
+      console.log(`[Flow] Updated contact tracking - lastSentTemplate: "${templateName}", flowId: "${flowId}"`);
+
+      // Save outgoing message
+      await Message.create({
+        userId,
+        contactId: contact._id,
+        waMessageId: result.messageId || `template_${Date.now()}`,
+        direction: 'outgoing',
+        type: 'text',
+        content: `[Template: ${templateName}]`,
+        timestamp: new Date(),
+        status: 'sent',
+        isRead: true,
+      });
+    } else {
+      console.error(`[Flow] Failed to send template: ${result.error}`);
+    }
+
+    return result;
+  };
+
+  // Helper to send custom message and track state
+  const sendCustomMessageAndTrack = async (customMessageName: string, flowId?: string) => {
+    // Extract actual name from "custom:MessageName" format
+    const actualName = customMessageName.startsWith('custom:')
+      ? customMessageName.replace('custom:', '')
+      : customMessageName;
+
+    // Look up the custom message from database
+    const customMsg = await CustomMessage.findOne({ userId, name: actualName });
+    if (!customMsg) {
+      console.error(`[Flow] Custom message "${actualName}" not found`);
+      return { success: false, error: `Custom message "${actualName}" not found` };
+    }
+
+    const result = await sendWhatsAppCustomMessage({
+      phoneNumberId: account.phoneNumberId,
+      accessToken: account.accessToken,
+      recipientPhone: contact.waId,
+      content: customMsg.content,
+      buttons: customMsg.buttons,
+    });
+
+    if (result.success) {
+      console.log(`[Flow] Sent custom message "${actualName}" to ${contact.waId}`);
+
+      // Track last sent template for function processing
+      await Contact.findByIdAndUpdate(contact._id, {
+        lastSentTemplate: customMessageName, // Keep the custom: prefix for tracking
+        lastSentFlowId: flowId || null,
+      });
+      console.log(`[Flow] Updated contact tracking - lastSentTemplate: "${customMessageName}", flowId: "${flowId}"`);
+
+      // Save outgoing message
+      await Message.create({
+        userId,
+        contactId: contact._id,
+        waMessageId: result.messageId || `custom_${Date.now()}`,
+        direction: 'outgoing',
+        type: 'text',
+        content: customMsg.content,
+        timestamp: new Date(),
+        status: 'sent',
+        isRead: true,
+      });
+    } else {
+      console.error(`[Flow] Failed to send custom message: ${result.error}`);
+    }
+
+    return result;
+  };
+
+  // If it's a button reply, look for the flow connection
+  if (isButtonReply && buttonPayload) {
+    const flows = await Flow.find({ userId });
+
+    for (const flow of flows) {
+      const connection = flow.connections.find(
+        (conn: any) => conn.button === buttonPayload || conn.button === messageText
+      );
+
+      if (connection) {
+        if (connection.targetType === 'template') {
+          console.log(`[Flow] Button "${buttonPayload}" triggered template: ${connection.target}`);
+          await sendTemplateAndTrack(connection.target, flow._id.toString());
+          return;
+        } else if (connection.targetType === 'custom_message') {
+          console.log(`[Flow] Button "${buttonPayload}" triggered custom message: ${connection.target}`);
+          await sendCustomMessageAndTrack(connection.target, flow._id.toString());
+          return;
+        }
+      }
+    }
+  }
+
+  // Reload contact from database to get fresh lastSentTemplate values
+  const freshContact = await Contact.findById(contact._id);
+
+  // Check if this is a response to a template with a function connection
+  console.log(`[Flow Debug] Checking function connection - lastSentTemplate: "${freshContact?.lastSentTemplate}", lastSentFlowId: "${freshContact?.lastSentFlowId}", isButtonReply: ${isButtonReply}`);
+
+  if (!isButtonReply && freshContact?.lastSentTemplate && freshContact?.lastSentFlowId) {
+    const flow = await Flow.findById(freshContact.lastSentFlowId);
+    console.log(`[Flow Debug] Found flow:`, flow ? flow.name : 'null');
+
+    if (flow) {
+      // Find a function connection for the last sent template
+      const functionConnection = flow.connections.find(
+        (conn: any) => conn.sourceTemplate === freshContact.lastSentTemplate &&
+          conn.targetType === 'function' &&
+          !conn.button
+      );
+
+      if (functionConnection) {
+        console.log(`[Flow] Processing function "${functionConnection.target}" with input: "${messageText}"`);
+
+        // Look up the function
+        const fn = await Function.findOne({ userId, name: functionConnection.target });
+
+        if (fn) {
+          try {
+            // Execute the function
+            const result = await runUserFunction({
+              code: fn.code,
+              input: messageText,
+              context: { userId, contactId: contact._id.toString() },
+              timeoutMs: fn.timeoutMs,
+            });
+
+            console.log(`[Flow] Function result:`, result.output);
+
+            // Send the next template if configured
+            if (functionConnection.nextTemplate) {
+              const nextTemplate = functionConnection.nextTemplate;
+              // Check if next message is a custom message (prefixed with "custom:")
+              if (nextTemplate.startsWith('custom:')) {
+                await sendCustomMessageAndTrack(nextTemplate, flow._id.toString());
+              } else {
+                await sendTemplateAndTrack(nextTemplate, flow._id.toString());
+              }
+            }
+          } catch (err: any) {
+            console.error(`[Flow] Function execution error:`, err.message);
+          }
+        } else {
+          console.warn(`[Flow] Function "${functionConnection.target}" not found`);
+        }
+
+        // Clear tracking after processing
+        await Contact.findByIdAndUpdate(contact._id, {
+          lastSentTemplate: '',
+          lastSentFlowId: null,
+        });
+        return;
+      }
+    }
+  }
+
+  // For regular messages, check if any flow trigger matches
+  console.log(`[Flow Debug] Checking flows for userId: ${userId}, message: "${messageText}"`);
+
+  const matchingFlow = await findMatchingFlow(userId, messageText);
+
+  console.log(`[Flow Debug] Matching flow result:`, matchingFlow ? {
+    name: matchingFlow.name,
+    firstTemplate: matchingFlow.firstTemplate,
+    trigger: matchingFlow.trigger,
+  } : 'No matching flow found');
+
+  if (matchingFlow && matchingFlow.firstTemplate) {
+    const firstTemplate = matchingFlow.firstTemplate;
+    console.log(`[Flow] Message matched flow "${matchingFlow.name}", sending first message: ${firstTemplate}`);
+
+    // Check if first message is a custom message (prefixed with "custom:")
+    if (firstTemplate.startsWith('custom:')) {
+      await sendCustomMessageAndTrack(firstTemplate, matchingFlow._id.toString());
+    } else {
+      await sendTemplateAndTrack(firstTemplate, matchingFlow._id.toString());
+    }
+  }
+}
+

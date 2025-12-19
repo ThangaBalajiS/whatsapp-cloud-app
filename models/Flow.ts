@@ -1,10 +1,18 @@
 import mongoose from 'mongoose';
 
+export type TriggerMatchType = 'any' | 'includes' | 'starts_with' | 'exact';
+
+export type FlowTrigger = {
+  matchType: TriggerMatchType;
+  matchText: string;
+};
+
 export type FlowConnection = {
   sourceTemplate: string;
-  button: string;
-  targetType: 'template' | 'function';
+  button?: string; // Optional - not needed for function connections
+  targetType: 'template' | 'function' | 'custom_message';
   target: string;
+  nextTemplate?: string; // For function connections: template to send after function executes
 };
 
 export type FlowFunctionDefinition = {
@@ -16,16 +24,29 @@ export type FlowFunctionDefinition = {
   nextTemplate?: string;
 };
 
+const TriggerSchema = new mongoose.Schema<FlowTrigger>(
+  {
+    matchType: {
+      type: String,
+      enum: ['any', 'includes', 'starts_with', 'exact'],
+      default: 'any',
+    },
+    matchText: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const ConnectionSchema = new mongoose.Schema<FlowConnection>(
   {
     sourceTemplate: { type: String, required: true },
-    button: { type: String, required: true },
+    button: { type: String, default: '' }, // Optional for function connections
     targetType: {
       type: String,
       required: true,
-      enum: ['template', 'function'],
+      enum: ['template', 'function', 'custom_message'],
     },
     target: { type: String, required: true },
+    nextTemplate: { type: String, default: '' }, // Template after function execution
   },
   { _id: false }
 );
@@ -56,7 +77,15 @@ const FlowSchema = new mongoose.Schema(
     },
     name: {
       type: String,
-      default: 'Default Flow',
+      default: 'New Flow',
+    },
+    trigger: {
+      type: TriggerSchema,
+      default: { matchType: 'any', matchText: '' },
+    },
+    firstTemplate: {
+      type: String,
+      default: '',
     },
     connections: {
       type: [ConnectionSchema],
@@ -70,14 +99,24 @@ const FlowSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// One flow document per user keeps the builder simple for now.
-FlowSchema.index({ userId: 1 }, { unique: true });
+// Allow multiple flows per user - index for faster queries
+FlowSchema.index({ userId: 1 });
 
 export type FlowDocument = mongoose.Document & {
   userId: mongoose.Types.ObjectId;
   name: string;
+  trigger: FlowTrigger;
+  firstTemplate: string;
   connections: FlowConnection[];
   functions: FlowFunctionDefinition[];
+  createdAt: Date;
+  updatedAt: Date;
 };
 
-export default mongoose.models.Flow || mongoose.model<FlowDocument>('Flow', FlowSchema);
+// Delete cached model in development to ensure schema changes are picked up
+if (mongoose.models.Flow) {
+  delete mongoose.models.Flow;
+}
+
+export default mongoose.model<FlowDocument>('Flow', FlowSchema);
+
