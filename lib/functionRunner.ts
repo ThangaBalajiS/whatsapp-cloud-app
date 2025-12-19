@@ -43,7 +43,6 @@ export async function runUserFunction({
   };
 
   const script = new vm.Script(code, {
-    displayErrors: true,
     filename: 'user-function.js',
   });
 

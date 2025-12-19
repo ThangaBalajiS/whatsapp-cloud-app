@@ -320,7 +320,7 @@ export default function FunctionsClient({
                                 ) : functions.length === 0 ? (
                                     <div className="empty-state">
                                         <p>No functions yet</p>
-                                        <span className="muted">Click "+ Add Function" to create your first function.</span>
+                                        <span className="muted">Click &quot;+ Add Function&quot; to create your first function.</span>
                                     </div>
                                 ) : (
                                     <div className="functions-list">

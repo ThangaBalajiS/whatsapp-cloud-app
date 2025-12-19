@@ -1185,7 +1185,7 @@ export default function FlowBuilderClient({
           <div className="modal-body">
             <div className="mapping-info">
               <p className="muted">
-                Map the JSON keys from <strong>{editingFunctionMapping.functionName}</strong>'s output
+                Map the JSON keys from <strong>{editingFunctionMapping.functionName}</strong>&apos;s output
                 to placeholders in <strong>{editingFunctionMapping.nextTemplate.replace('custom:', '')}</strong>.
               </p>
               <p className="mapping-hint">
