@@ -13,6 +13,7 @@ export type FlowConnection = {
   targetType: 'template' | 'function' | 'custom_message';
   target: string;
   nextTemplate?: string; // For function connections: template to send after function executes
+  outputMapping?: Record<string, string>; // Maps function output keys to placeholder names
 };
 
 export type FlowFunctionDefinition = {
@@ -47,6 +48,7 @@ const ConnectionSchema = new mongoose.Schema<FlowConnection>(
     },
     target: { type: String, required: true },
     nextTemplate: { type: String, default: '' }, // Template after function execution
+    outputMapping: { type: mongoose.Schema.Types.Mixed }, // Maps function output keys to placeholders
   },
   { _id: false }
 );

@@ -242,6 +242,7 @@ function sanitizeConnections(connections: FlowConnection[]) {
     button: conn.button || '',
     targetType: conn.targetType,
     target: conn.target,
+    outputMapping: conn.outputMapping,
     nextTemplate: conn.nextTemplate || '',
   }));
 }

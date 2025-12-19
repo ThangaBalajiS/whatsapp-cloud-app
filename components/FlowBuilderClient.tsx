@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { DashboardSidebar } from './DashboardSidebar';
 import {
@@ -148,6 +148,12 @@ export default function FlowBuilderClient({
   const [trigger, setTrigger] = useState<FlowTrigger>({ matchType: 'any', matchText: '' });
   const [firstTemplate, setFirstTemplate] = useState('');
   const [connections, setConnections] = useState<FlowConnection[]>([]);
+  const connectionsRef = useRef<FlowConnection[]>([]);
+
+  // Keep ref in sync with state to avoid stale closures
+  useEffect(() => {
+    connectionsRef.current = connections;
+  }, [connections]);
 
   // React Flow state
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
@@ -249,16 +255,17 @@ export default function FlowBuilderClient({
     // Extract connections from edges
     const flowConnections = extractConnectionsFromEdges();
 
+    console.log('[SaveFlow] Connections being saved:', JSON.stringify(flowConnections, null, 2));
+
     const payload = {
       name: flowName,
       trigger,
       firstTemplate,
       connections: flowConnections,
     };
-
     try {
       const url = currentFlowId ? `/api/flows/${currentFlowId}` : '/api/flows';
-      const method = currentFlowId ? 'PUT' : 'POST';
+      const method = 'POST';  // Always use POST
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -718,6 +725,10 @@ export default function FlowBuilderClient({
     const functionNextTemplates: Map<string, string> = new Map();
     const functionOutputMappings: Map<string, Record<string, string>> = new Map();
 
+    // Use ref to get latest connections (avoid stale closure)
+    const currentConnections = connectionsRef.current;
+    console.log('[extractConnectionsFromEdges] Current connections from ref:', JSON.stringify(currentConnections, null, 2));
+
     // First pass: collect function -> next template mappings and output mappings
     edges.forEach((edge) => {
       if (edge.target.startsWith('add-')) return;
@@ -740,12 +751,15 @@ export default function FlowBuilderClient({
       }
     });
 
-    // Collect existing output mappings from connections state
-    connections.forEach((conn) => {
+    // Collect existing output mappings from connections ref
+    currentConnections.forEach((conn) => {
       if (conn.targetType === 'function' && conn.outputMapping) {
         functionOutputMappings.set(conn.target, conn.outputMapping);
+        console.log(`[extractConnectionsFromEdges] Found mapping for function "${conn.target}":`, conn.outputMapping);
       }
     });
+
+    console.log('[extractConnectionsFromEdges] functionOutputMappings size:', functionOutputMappings.size);
 
     // Second pass: build connections
     edges.forEach((edge) => {
@@ -1116,17 +1130,39 @@ export default function FlowBuilderClient({
   const handleSaveMapping = (mapping: Record<string, string>) => {
     if (!editingFunctionMapping) return;
 
-    const { functionName, sourceTemplate } = editingFunctionMapping;
+    const { functionName, sourceTemplate, nextTemplate } = editingFunctionMapping;
 
-    // Update the connection with the new mapping
-    const updatedConnections = connections.map((c) => {
-      if (c.sourceTemplate === sourceTemplate && c.targetType === 'function' && c.target === functionName) {
-        return { ...c, outputMapping: mapping };
-      }
-      return c;
-    });
+    // Check if connection exists
+    const existingConnection = connections.find(
+      (c) => c.sourceTemplate === sourceTemplate && c.targetType === 'function' && c.target === functionName
+    );
 
+    let updatedConnections: FlowConnection[];
+
+    if (existingConnection) {
+      // Update existing connection
+      updatedConnections = connections.map((c) => {
+        if (c.sourceTemplate === sourceTemplate && c.targetType === 'function' && c.target === functionName) {
+          return { ...c, outputMapping: mapping };
+        }
+        return c;
+      });
+    } else {
+      // Add new connection with outputMapping
+      const newConnection: FlowConnection = {
+        sourceTemplate,
+        targetType: 'function',
+        target: functionName,
+        nextTemplate: nextTemplate || undefined,
+        outputMapping: mapping,
+      };
+      updatedConnections = [...connections, newConnection];
+    }
+
+    console.log('[handleSaveMapping] Updated connections:', JSON.stringify(updatedConnections, null, 2));
     setConnections(updatedConnections);
+    // Also update ref immediately (don't wait for useEffect)
+    connectionsRef.current = updatedConnections;
 
     // Rebuild nodes with updated connections
     const newFlow: Flow = {

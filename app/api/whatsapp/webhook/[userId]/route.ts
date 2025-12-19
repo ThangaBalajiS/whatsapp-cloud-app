@@ -314,7 +314,7 @@ async function processFlowForMessage({
   };
 
   // Helper to send custom message and track state
-  const sendCustomMessageAndTrack = async (customMessageName: string, flowId?: string) => {
+  const sendCustomMessageAndTrack = async (customMessageName: string, flowId?: string, replacements?: Record<string, string>) => {
     // Extract actual name from "custom:MessageName" format
     const actualName = customMessageName.startsWith('custom:')
       ? customMessageName.replace('custom:', '')
@@ -327,11 +327,20 @@ async function processFlowForMessage({
       return { success: false, error: `Custom message "${actualName}" not found` };
     }
 
+    // Apply placeholder replacements if provided
+    let content = customMsg.content;
+    if (replacements) {
+      for (const [placeholder, value] of Object.entries(replacements)) {
+        content = content.replace(new RegExp(`\\{\\{${placeholder}\\}\\}`, 'g'), value);
+      }
+      console.log(`[Flow] Applied ${Object.keys(replacements).length} placeholder replacements`);
+    }
+
     const result = await sendWhatsAppCustomMessage({
       phoneNumberId: account.phoneNumberId,
       accessToken: account.accessToken,
       recipientPhone: contact.waId,
-      content: customMsg.content,
+      content: content,
       buttons: customMsg.buttons,
     });
 
@@ -352,7 +361,7 @@ async function processFlowForMessage({
         waMessageId: result.messageId || `custom_${Date.now()}`,
         direction: 'outgoing',
         type: 'text',
-        content: customMsg.content,
+        content: content,
         timestamp: new Date(),
         status: 'sent',
         isRead: true,
@@ -423,12 +432,42 @@ async function processFlowForMessage({
 
             console.log(`[Flow] Function result:`, result.output);
 
+            // Build placeholder replacements from function output
+            let replacements: Record<string, string> = {};
+            const output = result.output;
+
+            if (output && typeof output === 'object') {
+              // Get outputMapping from connection (convert Map to object if needed)
+              const outputMapping: Record<string, string> = functionConnection.outputMapping
+                ? (functionConnection.outputMapping instanceof Map
+                  ? Object.fromEntries(functionConnection.outputMapping)
+                  : functionConnection.outputMapping)
+                : {};
+
+              console.log(`[Flow] Output mapping:`, outputMapping);
+
+              if (Object.keys(outputMapping).length > 0) {
+                // Use the configured outputMapping
+                for (const [outputKey, placeholderName] of Object.entries(outputMapping)) {
+                  if ((output as any)[outputKey] !== undefined) {
+                    replacements[placeholderName] = String((output as any)[outputKey]);
+                  }
+                }
+              } else {
+                // No mapping configured - use output keys directly as placeholder names
+                for (const [key, value] of Object.entries(output as Record<string, any>)) {
+                  replacements[key] = String(value);
+                }
+              }
+              console.log(`[Flow] Built replacements:`, replacements);
+            }
+
             // Send the next template if configured
             if (functionConnection.nextTemplate) {
               const nextTemplate = functionConnection.nextTemplate;
               // Check if next message is a custom message (prefixed with "custom:")
               if (nextTemplate.startsWith('custom:')) {
-                await sendCustomMessageAndTrack(nextTemplate, flow._id.toString());
+                await sendCustomMessageAndTrack(nextTemplate, flow._id.toString(), replacements);
               } else {
                 await sendTemplateAndTrack(nextTemplate, flow._id.toString());
               }

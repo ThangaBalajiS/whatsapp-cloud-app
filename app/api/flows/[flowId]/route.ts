@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 }
 
 // PUT - Update a specific flow
-export async function PUT(request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
     try {
         const cookieStore = cookies();
         const session = cookieStore.get('session');
