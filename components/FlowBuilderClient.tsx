@@ -88,6 +88,7 @@ type FlowConnection = {
   targetType: 'template' | 'function' | 'custom_message';
   target: string;
   nextTemplate?: string;
+  outputMapping?: Record<string, string>; // Maps function output keys to placeholder names
 };
 
 type CustomMessage = {
@@ -156,6 +157,15 @@ export default function FlowBuilderClient({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showFunctionModal, setShowFunctionModal] = useState(false);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
+  const [showMappingModal, setShowMappingModal] = useState(false);
+  const [editingFunctionMapping, setEditingFunctionMapping] = useState<{
+    functionName: string;
+    sourceTemplate: string;
+    nextTemplate: string;
+    currentMapping: Record<string, string>;
+  } | null>(null);
+  const [mappingForm, setMappingForm] = useState<Record<string, string>>({});
+  const [newOutputKey, setNewOutputKey] = useState('');
   const [pickerTab, setPickerTab] = useState<'templates' | 'custom'>('templates');
   const [pendingConnection, setPendingConnection] = useState<{
     sourceNode: string;
@@ -291,6 +301,26 @@ export default function FlowBuilderClient({
     );
   };
 
+  // Get placeholders from a template or custom message
+  const getTemplatePlaceholders = (templateName: string): string[] => {
+    if (templateName.startsWith('custom:')) {
+      const customMsgName = templateName.replace('custom:', '');
+      const customMsg = customMessages.find((m) => m.name === customMsgName);
+      return customMsg?.placeholders || [];
+    }
+
+    // For WhatsApp templates, extract {{1}}, {{2}} style placeholders from BODY component
+    const template = templates.find((t) => t.name === templateName);
+    if (!template) return [];
+
+    const bodyComponent = template.components?.find((c) => c.type === 'BODY');
+    if (!bodyComponent?.text) return [];
+
+    const matches = bodyComponent.text.match(/\{\{\d+\}\}/g);
+    if (!matches) return [];
+    return [...new Set(matches)];
+  };
+
   // ==================== BUILD NODES FROM FLOW ====================
   const initializeNodes = () => {
     const triggerNode: Node = {
@@ -409,11 +439,26 @@ export default function FlowBuilderClient({
     const nodeId = `node-${templateName.replace(/[^a-zA-Z0-9]/g, '-')}`;
     const buttons = getTemplateButtons(templateName);
 
+    // Check if this template has a function attached (for templates without buttons)
+    const funcConn = connections.find(
+      (c) => c.sourceTemplate === templateName && c.targetType === 'function' && !c.button
+    );
+    const hasFunctionAttached = !!funcConn;
+
     // Create node
     const nodeData: any = {
       label: displayName,
       buttons: buttons.map((btn, idx) => ({ text: btn.text || `Button ${idx + 1}`, id: `btn-${idx}` })),
       onRemove: () => removeNode(nodeId),
+      hasFunctionAttached,
+      onAddFunction: () => {
+        setPendingConnection({
+          sourceNode: nodeId,
+          sourceHandle: isCustom ? 'custom-out' : 'template-out',
+          type: 'function-next'
+        });
+        setShowFunctionModal(true);
+      },
     };
 
     if (isCustom) {
@@ -484,15 +529,12 @@ export default function FlowBuilderClient({
       });
     } else {
       // Templates without buttons can connect to functions
-      const funcConn = connections.find(
-        (c) => c.sourceTemplate === templateName && c.targetType === 'function' && !c.button
-      );
-
       const funcY = y + 120;
 
       if (funcConn) {
         const funcNodeId = `func-${funcConn.target.replace(/[^a-zA-Z0-9]/g, '-')}`;
         const fn = functions.find((f) => f.name === funcConn.target);
+        const hasMapping = funcConn.outputMapping && Object.keys(funcConn.outputMapping).length > 0;
 
         nodes.push({
           id: funcNodeId,
@@ -502,6 +544,17 @@ export default function FlowBuilderClient({
             label: funcConn.target,
             description: fn?.description,
             onRemove: () => removeNode(funcNodeId),
+            hasMapping,
+            onClick: funcConn.nextTemplate ? () => {
+              setEditingFunctionMapping({
+                functionName: funcConn.target,
+                sourceTemplate: templateName,
+                nextTemplate: funcConn.nextTemplate!,
+                currentMapping: funcConn.outputMapping || {},
+              });
+              setMappingForm(funcConn.outputMapping || {});
+              setShowMappingModal(true);
+            } : undefined,
           },
         });
 
@@ -516,47 +569,185 @@ export default function FlowBuilderClient({
           style: { stroke: '#f59e0b' },
         });
 
-        // Function can have a next template
+        // Function can have a next template - add an "Add message" placeholder
         if (funcConn.nextTemplate) {
           buildNodeTree(funcConn.nextTemplate, funcNodeId, 'function-out', x, funcY + 120, nodes, edges, connections, visited);
-        }
-      } else {
-        // Add function placeholder
-        const addId = `add-${nodeId}-func`;
-        nodes.push({
-          id: addId,
-          type: 'add',
-          position: { x, y: funcY },
-          data: {
-            onClick: () => {
-              setPendingConnection({ sourceNode: nodeId, sourceHandle: isCustom ? 'custom-out' : 'template-out', type: 'function-next' });
-              setShowFunctionModal(true);
+        } else {
+          // Add message placeholder after function
+          const addId = `add-${funcNodeId}-next`;
+          nodes.push({
+            id: addId,
+            type: 'add',
+            position: { x, y: funcY + 120 },
+            data: {
+              onClick: () => {
+                setPendingConnection({ sourceNode: funcNodeId, sourceHandle: 'function-out', type: 'button' });
+                setShowTemplateModal(true);
+              },
             },
-          },
-        });
-        edges.push({
-          id: `${nodeId}-to-add-func`,
-          source: nodeId,
-          target: addId,
-          sourceHandle: isCustom ? 'custom-out' : 'template-out',
-          targetHandle: 'add-in',
-          type: 'smoothstep',
-          style: { stroke: 'rgba(91, 157, 255, 0.5)', strokeDasharray: '5 5' },
-        });
+          });
+          edges.push({
+            id: `${funcNodeId}-to-add-next`,
+            source: funcNodeId,
+            target: addId,
+            sourceHandle: 'function-out',
+            targetHandle: 'add-in',
+            type: 'smoothstep',
+            style: { stroke: 'rgba(91, 157, 255, 0.5)', strokeDasharray: '5 5' },
+          });
+        }
       }
     }
   };
 
   const removeNode = (nodeId: string) => {
-    setNodes((nds) => nds.filter((n) => n.id !== nodeId && !n.id.startsWith(`add-${nodeId}`)));
-    setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
-    // TODO: Also update connections and firstTemplate state
+    // Helper function to find all descendant node IDs recursively
+    const findAllDescendants = (startNodeId: string, currentEdges: FlowEdge[], visited: Set<string> = new Set()): Set<string> => {
+      if (visited.has(startNodeId)) return visited;
+      visited.add(startNodeId);
+
+      // Find all nodes that this node connects to (children)
+      currentEdges
+        .filter((e) => e.source === startNodeId)
+        .forEach((e) => {
+          if (!e.target.startsWith('add-')) {
+            findAllDescendants(e.target, currentEdges, visited);
+          }
+        });
+
+      return visited;
+    };
+
+    setEdges((currentEdges) => {
+      // Find the parent edge (the edge that points TO this node)
+      const parentEdge = currentEdges.find((e) => e.target === nodeId);
+
+      // Find all nodes to remove (the node itself and all descendants)
+      const nodesToRemove = findAllDescendants(nodeId, currentEdges);
+
+      // Get position of the node being removed for the new add-placeholder
+      let removedNodePosition = { x: 250, y: 200 };
+
+      setNodes((nds) => {
+        const nodeBeingRemoved = nds.find((n) => n.id === nodeId);
+        if (nodeBeingRemoved) {
+          removedNodePosition = nodeBeingRemoved.position;
+        }
+
+        // Filter out removed nodes and their add-placeholders
+        const filteredNodes = nds.filter((n) => {
+          if (nodesToRemove.has(n.id)) return false;
+          for (const removedId of nodesToRemove) {
+            if (n.id.startsWith(`add-${removedId}`)) return false;
+          }
+          return true;
+        });
+
+        // If we had a parent, add a new add-placeholder in place of the deleted node
+        if (parentEdge) {
+          const sourceNode = nds.find((n) => n.id === parentEdge.source);
+          const addNodeId = `add-${parentEdge.source}-${parentEdge.sourceHandle || 'out'}`;
+
+          // Determine the connection type based on parent node and handle
+          let connectionType: 'first' | 'button' | 'function-next' = 'button';
+          if (parentEdge.source === 'trigger') {
+            connectionType = 'first';
+          } else if (sourceNode?.type === 'function') {
+            connectionType = 'function-next';
+          } else if (parentEdge.sourceHandle?.startsWith('btn-')) {
+            connectionType = 'button';
+          } else {
+            connectionType = 'function-next';
+          }
+
+          // Check if this add-node already exists
+          const addNodeExists = filteredNodes.some((n) => n.id === addNodeId);
+
+          if (!addNodeExists) {
+            filteredNodes.push({
+              id: addNodeId,
+              type: 'add',
+              position: removedNodePosition,
+              data: {
+                onClick: () => {
+                  setPendingConnection({
+                    sourceNode: parentEdge.source,
+                    sourceHandle: parentEdge.sourceHandle || 'trigger-out',
+                    type: connectionType
+                  });
+                  if (connectionType === 'function-next' && sourceNode?.type !== 'function') {
+                    setShowFunctionModal(true);
+                  } else {
+                    setShowTemplateModal(true);
+                  }
+                },
+              },
+            });
+          }
+        }
+
+        return filteredNodes;
+      });
+
+      // Remove all edges connected to any of the removed nodes
+      const filteredEdges = currentEdges.filter((e) =>
+        !nodesToRemove.has(e.source) && !nodesToRemove.has(e.target)
+      );
+
+      // If we had a parent, add a new edge to the add-placeholder
+      if (parentEdge) {
+        const addNodeId = `add-${parentEdge.source}-${parentEdge.sourceHandle || 'out'}`;
+        filteredEdges.push({
+          id: `${parentEdge.source}-to-${addNodeId}`,
+          source: parentEdge.source,
+          target: addNodeId,
+          sourceHandle: parentEdge.sourceHandle,
+          targetHandle: 'add-in',
+          type: 'smoothstep',
+          style: { stroke: 'rgba(91, 157, 255, 0.5)', strokeDasharray: '5 5' },
+        });
+      }
+
+      return filteredEdges;
+    });
   };
 
   // ==================== EXTRACT CONNECTIONS FROM EDGES ====================
   const extractConnectionsFromEdges = (): FlowConnection[] => {
     const result: FlowConnection[] = [];
+    const functionNextTemplates: Map<string, string> = new Map();
+    const functionOutputMappings: Map<string, Record<string, string>> = new Map();
 
+    // First pass: collect function -> next template mappings and output mappings
+    edges.forEach((edge) => {
+      if (edge.target.startsWith('add-')) return;
+
+      const sourceNode = nodes.find((n) => n.id === edge.source);
+      const targetNode = nodes.find((n) => n.id === edge.target);
+
+      if (!sourceNode || !targetNode) return;
+
+      // If source is a function node and target is a template/customMessage
+      if (sourceNode.type === 'function' && (targetNode.type === 'template' || targetNode.type === 'customMessage')) {
+        const funcName = sourceNode.data.label as string;
+        let nextTemplateName = '';
+        if (targetNode.type === 'template') {
+          nextTemplateName = targetNode.data.label as string;
+        } else {
+          nextTemplateName = `custom:${targetNode.data.label}`;
+        }
+        functionNextTemplates.set(funcName, nextTemplateName);
+      }
+    });
+
+    // Collect existing output mappings from connections state
+    connections.forEach((conn) => {
+      if (conn.targetType === 'function' && conn.outputMapping) {
+        functionOutputMappings.set(conn.target, conn.outputMapping);
+      }
+    });
+
+    // Second pass: build connections
     edges.forEach((edge) => {
       // Skip edges to add nodes
       if (edge.target.startsWith('add-')) return;
@@ -569,18 +760,15 @@ export default function FlowBuilderClient({
       // Skip trigger -> first template (handled separately)
       if (sourceNode.id === 'trigger') return;
 
+      // Skip function -> template edges (handled via nextTemplate on the function connection)
+      if (sourceNode.type === 'function') return;
+
       // Get source template name
       let sourceTemplate = '';
       if (sourceNode.type === 'template') {
         sourceTemplate = sourceNode.data.label as string;
       } else if (sourceNode.type === 'customMessage') {
         sourceTemplate = `custom:${sourceNode.data.label}`;
-      } else if (sourceNode.type === 'function') {
-        // Function -> next template
-        const funcName = sourceNode.data.label as string;
-        // Find the connection that this function belongs to and set nextTemplate
-        // This is handled differently
-        return;
       }
 
       if (!sourceTemplate) return;
@@ -588,6 +776,8 @@ export default function FlowBuilderClient({
       // Determine target
       let targetType: 'template' | 'custom_message' | 'function' = 'template';
       let target = '';
+      let nextTemplate: string | undefined;
+      let outputMapping: Record<string, string> | undefined;
 
       if (targetNode.type === 'template') {
         targetType = 'template';
@@ -598,6 +788,10 @@ export default function FlowBuilderClient({
       } else if (targetNode.type === 'function') {
         targetType = 'function';
         target = targetNode.data.label as string;
+        // Get the nextTemplate for this function
+        nextTemplate = functionNextTemplates.get(target);
+        // Get existing output mapping
+        outputMapping = functionOutputMappings.get(target);
       }
 
       // Determine button from handle
@@ -613,6 +807,8 @@ export default function FlowBuilderClient({
         button,
         targetType,
         target,
+        nextTemplate,
+        outputMapping,
       });
     });
 
@@ -640,45 +836,75 @@ export default function FlowBuilderClient({
       };
       buildNodesFromFlow(newFlow);
     } else if (pendingConnection.type === 'button') {
-      // Add button connection
+      // Add button connection or function -> next template
       const sourceNode = nodes.find((n) => n.id === pendingConnection.sourceNode);
       if (!sourceNode) return;
 
-      let sourceTemplate = '';
-      if (sourceNode.type === 'template') {
-        sourceTemplate = sourceNode.data.label as string;
-      } else if (sourceNode.type === 'customMessage') {
-        sourceTemplate = `custom:${sourceNode.data.label}`;
+      // Check if the source is a function node
+      if (sourceNode.type === 'function') {
+        // This is setting the nextTemplate for a function connection
+        const functionName = sourceNode.data.label as string;
+
+        // Find the existing function connection and update its nextTemplate
+        const updatedConnections = connections.map((c) => {
+          if (c.targetType === 'function' && c.target === functionName) {
+            return { ...c, nextTemplate: targetName };
+          }
+          return c;
+        });
+
+        setConnections(updatedConnections);
+
+        // Rebuild nodes
+        const newFlow: Flow = {
+          _id: currentFlowId || '',
+          name: flowName,
+          trigger,
+          firstTemplate,
+          connections: updatedConnections,
+          functions: [],
+          createdAt: '',
+          updatedAt: '',
+        };
+        buildNodesFromFlow(newFlow);
+      } else {
+        // Regular button connection from template/custom message
+        let sourceTemplate = '';
+        if (sourceNode.type === 'template') {
+          sourceTemplate = sourceNode.data.label as string;
+        } else if (sourceNode.type === 'customMessage') {
+          sourceTemplate = `custom:${sourceNode.data.label}`;
+        }
+
+        const btnIdx = parseInt(pendingConnection.sourceHandle.replace('btn-', ''));
+        const buttons = getTemplateButtons(sourceTemplate);
+        const button = buttons[btnIdx]?.text;
+
+        const newConnection: FlowConnection = {
+          sourceTemplate,
+          button,
+          targetType: type === 'custom_message' ? 'custom_message' : 'template',
+          target: targetName,
+        };
+
+        setConnections((prev) => [
+          ...prev.filter((c) => !(c.sourceTemplate === sourceTemplate && c.button === button)),
+          newConnection,
+        ]);
+
+        // Rebuild nodes
+        const newFlow: Flow = {
+          _id: currentFlowId || '',
+          name: flowName,
+          trigger,
+          firstTemplate,
+          connections: [...connections.filter((c) => !(c.sourceTemplate === sourceTemplate && c.button === button)), newConnection],
+          functions: [],
+          createdAt: '',
+          updatedAt: '',
+        };
+        buildNodesFromFlow(newFlow);
       }
-
-      const btnIdx = parseInt(pendingConnection.sourceHandle.replace('btn-', ''));
-      const buttons = getTemplateButtons(sourceTemplate);
-      const button = buttons[btnIdx]?.text;
-
-      const newConnection: FlowConnection = {
-        sourceTemplate,
-        button,
-        targetType: type === 'custom_message' ? 'custom_message' : 'template',
-        target: targetName,
-      };
-
-      setConnections((prev) => [
-        ...prev.filter((c) => !(c.sourceTemplate === sourceTemplate && c.button === button)),
-        newConnection,
-      ]);
-
-      // Rebuild nodes
-      const newFlow: Flow = {
-        _id: currentFlowId || '',
-        name: flowName,
-        trigger,
-        firstTemplate,
-        connections: [...connections.filter((c) => !(c.sourceTemplate === sourceTemplate && c.button === button)), newConnection],
-        functions: [],
-        createdAt: '',
-        updatedAt: '',
-      };
-      buildNodesFromFlow(newFlow);
     }
 
     setShowTemplateModal(false);
@@ -886,6 +1112,145 @@ export default function FlowBuilderClient({
     </div>
   );
 
+  // Handle saving function output mapping
+  const handleSaveMapping = (mapping: Record<string, string>) => {
+    if (!editingFunctionMapping) return;
+
+    const { functionName, sourceTemplate } = editingFunctionMapping;
+
+    // Update the connection with the new mapping
+    const updatedConnections = connections.map((c) => {
+      if (c.sourceTemplate === sourceTemplate && c.targetType === 'function' && c.target === functionName) {
+        return { ...c, outputMapping: mapping };
+      }
+      return c;
+    });
+
+    setConnections(updatedConnections);
+
+    // Rebuild nodes with updated connections
+    const newFlow: Flow = {
+      _id: currentFlowId || '',
+      name: flowName,
+      trigger,
+      firstTemplate,
+      connections: updatedConnections,
+      functions: [],
+      createdAt: '',
+      updatedAt: '',
+    };
+    buildNodesFromFlow(newFlow);
+
+    setShowMappingModal(false);
+    setEditingFunctionMapping(null);
+  };
+
+  const renderMappingModal = () => {
+    if (!editingFunctionMapping) return null;
+
+    const placeholders = getTemplatePlaceholders(editingFunctionMapping.nextTemplate);
+
+    const addOutputKey = () => {
+      const key = newOutputKey.trim();
+      if (key && !mappingForm.hasOwnProperty(key)) {
+        setMappingForm({ ...mappingForm, [key]: '' });
+        setNewOutputKey('');
+      }
+    };
+
+    const removeOutputKey = (key: string) => {
+      const updated = { ...mappingForm };
+      delete updated[key];
+      setMappingForm(updated);
+    };
+
+    const updateMapping = (outputKey: string, placeholder: string) => {
+      setMappingForm({ ...mappingForm, [outputKey]: placeholder });
+    };
+
+    const closeMappingModal = () => {
+      setShowMappingModal(false);
+      setEditingFunctionMapping(null);
+      setMappingForm({});
+      setNewOutputKey('');
+    };
+
+    return (
+      <div className="modal-overlay" onClick={closeMappingModal}>
+        <div className="modal-content mapping-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h2>Configure Output Mapping</h2>
+            <button className="modal-close" onClick={closeMappingModal}>×</button>
+          </div>
+          <div className="modal-body">
+            <div className="mapping-info">
+              <p className="muted">
+                Map the JSON keys from <strong>{editingFunctionMapping.functionName}</strong>'s output
+                to placeholders in <strong>{editingFunctionMapping.nextTemplate.replace('custom:', '')}</strong>.
+              </p>
+              <p className="mapping-hint">
+                The function should return JSON like: <code>{`{ "key1": "value1", "key2": "value2" }`}</code>
+              </p>
+            </div>
+
+            <div className="mapping-section">
+              <label>Add Output Key</label>
+              <div className="mapping-add-row">
+                <input
+                  type="text"
+                  value={newOutputKey}
+                  onChange={(e) => setNewOutputKey(e.target.value)}
+                  placeholder="e.g., total_amount"
+                  onKeyDown={(e) => e.key === 'Enter' && addOutputKey()}
+                />
+                <button className="btn-primary small" onClick={addOutputKey}>Add</button>
+              </div>
+            </div>
+
+            {Object.keys(mappingForm).length > 0 && (
+              <div className="mapping-section">
+                <label>Output Key → Placeholder Mapping</label>
+                <div className="mapping-list">
+                  {Object.entries(mappingForm).map(([outputKey, placeholder]) => (
+                    <div key={outputKey} className="mapping-row">
+                      <span className="mapping-key">{outputKey}</span>
+                      <span className="mapping-arrow">→</span>
+                      <select
+                        value={placeholder}
+                        onChange={(e) => updateMapping(outputKey, e.target.value)}
+                      >
+                        <option value="">Select placeholder...</option>
+                        {placeholders.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                      <button className="ghost-btn small" onClick={() => removeOutputKey(outputKey)}>×</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {placeholders.length === 0 && (
+              <div className="mapping-warning">
+                ⚠️ The next message has no placeholders. Add placeholders like {`{{name}}`} to your message content.
+              </div>
+            )}
+
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={closeMappingModal}>
+                Cancel
+              </button>
+              <button className="btn-primary" onClick={() => handleSaveMapping(mappingForm)}>
+                Save Mapping
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ==================== NO WHATSAPP ACCOUNT ====================
   if (!hasWhatsAppAccount) {
     return (
@@ -1026,6 +1391,7 @@ export default function FlowBuilderClient({
       {showTemplateModal && renderTemplateModal()}
       {showFunctionModal && renderFunctionModal()}
       {showTriggerModal && renderTriggerModal()}
+      {showMappingModal && renderMappingModal()}
     </main>
   );
 }

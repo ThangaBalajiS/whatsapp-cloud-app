@@ -425,7 +425,13 @@ async function processFlowForMessage({
 
             // Send the next template if configured
             if (functionConnection.nextTemplate) {
-              await sendTemplateAndTrack(functionConnection.nextTemplate, flow._id.toString());
+              const nextTemplate = functionConnection.nextTemplate;
+              // Check if next message is a custom message (prefixed with "custom:")
+              if (nextTemplate.startsWith('custom:')) {
+                await sendCustomMessageAndTrack(nextTemplate, flow._id.toString());
+              } else {
+                await sendTemplateAndTrack(nextTemplate, flow._id.toString());
+              }
             }
           } catch (err: any) {
             console.error(`[Flow] Function execution error:`, err.message);

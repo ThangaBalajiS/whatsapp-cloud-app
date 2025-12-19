@@ -2504,6 +2504,65 @@ button:disabled {
   font-weight: 500;
 }
 
+/* Button handle positioning - centered vertically within each button row */
+.flow-button-handle {
+  position: absolute !important;
+  top: 50% !important;
+  right: -6px !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Node Footer - Add Function Button */
+.flow-node-footer {
+  padding: 8px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.flow-add-function-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.08));
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.flow-add-function-btn:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(245, 158, 11, 0.15));
+  border-style: solid;
+  transform: translateY(-1px);
+}
+
+.flow-configure-mapping-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(168, 85, 247, 0.08));
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 8px;
+  color: #a855f7;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.flow-configure-mapping-btn:hover {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(168, 85, 247, 0.15));
+  transform: translateY(-1px);
+}
+
 /* Node Type Colors */
 .trigger-node {
   border-color: rgba(74, 222, 128, 0.4);
@@ -2718,4 +2777,166 @@ select {
 select:focus {
   outline: none;
   border-color: rgba(91, 157, 255, 0.7);
+}
+
+/* ==================== MAPPING MODAL ==================== */
+.mapping-modal {
+  max-width: 600px;
+  width: 95vw;
+}
+
+.mapping-modal .modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mapping-info {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(168, 85, 247, 0.03));
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.mapping-info p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.mapping-info p+p {
+  margin-top: 8px;
+}
+
+.mapping-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mapping-hint code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.mapping-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mapping-section>label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mapping-add-row {
+  display: flex;
+  gap: 10px;
+}
+
+.mapping-add-row input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(17, 24, 48, 0.8);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.mapping-add-row input:focus {
+  outline: none;
+  border-color: rgba(168, 85, 247, 0.5);
+}
+
+.mapping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mapping-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.mapping-key {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mapping-arrow {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.mapping-row select {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(17, 24, 48, 0.8);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.mapping-row select:focus {
+  outline: none;
+  border-color: rgba(91, 157, 255, 0.5);
+}
+
+.mapping-warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: #f59e0b;
+  font-size: 14px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ghost-btn.small {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ghost-btn.small:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }

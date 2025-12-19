@@ -49,7 +49,9 @@ export type TemplateNodeData = {
     language?: string;
     buttons: { text: string; id: string }[];
     onAddConnection?: (buttonId: string) => void;
+    onAddFunction?: () => void;
     onRemove?: () => void;
+    hasFunctionAttached?: boolean;
 };
 
 type TemplateNodeProps = {
@@ -82,13 +84,22 @@ function TemplateNodeComponent({ data }: TemplateNodeProps) {
                                 type="source"
                                 position={Position.Right}
                                 id={`btn-${idx}`}
-                                style={{ top: `${30 + idx * 32}px` }}
+                                className="flow-button-handle"
                             />
                         </div>
                     ))}
                 </div>
             ) : (
-                <Handle type="source" position={Position.Bottom} id="template-out" />
+                <>
+                    {data.onAddFunction && !data.hasFunctionAttached && (
+                        <div className="flow-node-footer">
+                            <button className="flow-add-function-btn" onClick={data.onAddFunction}>
+                                ⚡ Add Function
+                            </button>
+                        </div>
+                    )}
+                    <Handle type="source" position={Position.Bottom} id="template-out" />
+                </>
             )}
         </div>
     );
@@ -102,7 +113,9 @@ export type CustomMessageNodeData = {
     content?: string;
     buttons: { text: string; id: string }[];
     onAddConnection?: (buttonId: string) => void;
+    onAddFunction?: () => void;
     onRemove?: () => void;
+    hasFunctionAttached?: boolean;
 };
 
 type CustomMessageNodeProps = {
@@ -135,13 +148,22 @@ function CustomMessageNodeComponent({ data }: CustomMessageNodeProps) {
                                 type="source"
                                 position={Position.Right}
                                 id={`btn-${idx}`}
-                                style={{ top: `${30 + idx * 32}px` }}
+                                className="flow-button-handle"
                             />
                         </div>
                     ))}
                 </div>
             ) : (
-                <Handle type="source" position={Position.Bottom} id="custom-out" />
+                <>
+                    {data.onAddFunction && !data.hasFunctionAttached && (
+                        <div className="flow-node-footer">
+                            <button className="flow-add-function-btn" onClick={data.onAddFunction}>
+                                ⚡ Add Function
+                            </button>
+                        </div>
+                    )}
+                    <Handle type="source" position={Position.Bottom} id="custom-out" />
+                </>
             )}
         </div>
     );
@@ -154,6 +176,8 @@ export type FunctionNodeData = {
     label: string;
     description?: string;
     onRemove?: () => void;
+    onClick?: () => void;
+    hasMapping?: boolean;
 };
 
 type FunctionNodeProps = {
@@ -168,7 +192,7 @@ function FunctionNodeComponent({ data }: FunctionNodeProps) {
                 <span className="flow-node-icon">⚡</span>
                 <span className="flow-node-type">Function</span>
                 {data.onRemove && (
-                    <button className="flow-node-remove" onClick={data.onRemove}>×</button>
+                    <button className="flow-node-remove" onClick={(e) => { e.stopPropagation(); data.onRemove?.(); }}>×</button>
                 )}
             </div>
             <div className="flow-node-body">
@@ -177,6 +201,13 @@ function FunctionNodeComponent({ data }: FunctionNodeProps) {
                     <span className="flow-node-meta">{data.description}</span>
                 )}
             </div>
+            {data.onClick && (
+                <div className="flow-node-footer">
+                    <button className="flow-configure-mapping-btn" onClick={data.onClick}>
+                        🔗 {data.hasMapping ? 'Edit Mapping' : 'Configure Mapping'}
+                    </button>
+                </div>
+            )}
             <Handle type="source" position={Position.Bottom} id="function-out" />
         </div>
     );
