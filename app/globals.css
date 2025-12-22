@@ -590,6 +590,7 @@ button:disabled {
 .message-content {
   word-wrap: break-word;
   line-height: 1.4;
+  white-space: pre-wrap;
 }
 
 .message-meta {
@@ -1979,6 +1980,11 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 24px;
+  padding-right: 4px;
 }
 
 .custom-message-card {
@@ -2011,6 +2017,7 @@ button:disabled {
   border-radius: 10px;
   font-size: 14px;
   line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .message-preview-text {
@@ -2248,6 +2255,7 @@ button:disabled {
   font-size: 15px;
   word-wrap: break-word;
   color: var(--text);
+  white-space: pre-wrap;
 }
 
 .message-preview-buttons {

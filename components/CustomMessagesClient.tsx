@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { DashboardSidebar } from './DashboardSidebar';
 
 type ButtonType = 'quick_reply' | 'url' | 'call';
@@ -318,11 +319,11 @@ export default function CustomMessagesClient({
                                         <div className="custom-message-header">
                                             <div className="custom-message-name">{msg.name}</div>
                                             <div className="custom-message-actions">
-                                                <button className="ghost-btn small" onClick={() => openModal(msg)}>
-                                                    Edit
+                                                <button className="ghost-btn small" onClick={() => openModal(msg)} title="Edit">
+                                                    <Pencil size={14} />
                                                 </button>
-                                                <button className="ghost-btn small danger" onClick={() => deleteMessage(msg)} disabled={saving}>
-                                                    Delete
+                                                <button className="ghost-btn small danger" onClick={() => deleteMessage(msg)} disabled={saving} title="Delete">
+                                                    <Trash2 size={14} />
                                                 </button>
                                             </div>
                                         </div>

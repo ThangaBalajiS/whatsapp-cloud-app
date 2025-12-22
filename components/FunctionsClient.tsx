@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { DashboardSidebar } from './DashboardSidebar';
 
 type FlowFunction = {
@@ -329,11 +330,11 @@ export default function FunctionsClient({
                                                 <div className="function-item-header">
                                                     <div className="function-name">{fn.name}</div>
                                                     <div className="function-item-actions">
-                                                        <button className="ghost-btn small" onClick={() => openModal(fn)}>
-                                                            Edit
+                                                        <button className="ghost-btn small" onClick={() => openModal(fn)} title="Edit">
+                                                            <Pencil size={14} />
                                                         </button>
-                                                        <button className="ghost-btn small danger" onClick={() => removeFunction(fn)} disabled={saving}>
-                                                            Remove
+                                                        <button className="ghost-btn small danger" onClick={() => removeFunction(fn)} disabled={saving} title="Remove">
+                                                            <Trash2 size={14} />
                                                         </button>
                                                     </div>
                                                 </div>
