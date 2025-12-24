@@ -23,7 +23,7 @@ export async function createSessionToken(user: AuthenticatedUser): Promise<strin
   return await new SignJWT({ email: user.email, id: user.id, name: user.name })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('1h')
+    .setExpirationTime('7d') // 7 days
     .sign(SECRET_KEY);
 }
 
