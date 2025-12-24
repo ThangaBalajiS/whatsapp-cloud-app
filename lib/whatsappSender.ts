@@ -169,6 +169,8 @@ export type SendCustomMessageOptions = {
 
 /**
  * Send a custom message (interactive message with optional buttons)
+ * Note: WhatsApp interactive messages only support quick_reply buttons natively.
+ * URL and Call buttons are appended to the message body as clickable links/numbers.
  */
 export async function sendWhatsAppCustomMessage({
     phoneNumberId,
@@ -180,19 +182,42 @@ export async function sendWhatsAppCustomMessage({
     try {
         const decryptedToken = decrypt(accessToken);
 
-        // If no buttons, send as plain text
-        if (buttons.length === 0) {
+        // Separate button types
+        const quickReplyButtons = buttons.filter(btn => btn.type === 'quick_reply');
+        const urlButtons = buttons.filter(btn => btn.type === 'url' && btn.url);
+        const callButtons = buttons.filter(btn => btn.type === 'call' && btn.phone);
+
+        // Build the message content with URL and Call buttons appended
+        let finalContent = content;
+
+        // Append URL buttons as clickable links
+        if (urlButtons.length > 0) {
+            const urlLinks = urlButtons
+                .map(btn => `🔗 ${btn.text}: ${btn.url}`)
+                .join('\n');
+            finalContent += '\n\n' + urlLinks;
+        }
+
+        // Append Call buttons as phone numbers
+        if (callButtons.length > 0) {
+            const callLinks = callButtons
+                .map(btn => `📞 ${btn.text}: ${btn.phone}`)
+                .join('\n');
+            finalContent += '\n\n' + callLinks;
+        }
+
+        // If no quick_reply buttons, send as plain text (with URL/Call info appended)
+        if (quickReplyButtons.length === 0) {
             return sendWhatsAppText({
                 phoneNumberId,
                 accessToken,
                 recipientPhone,
-                message: content,
+                message: finalContent,
             });
         }
 
-        // With buttons, send as interactive message
-        const interactiveButtons = buttons
-            .filter(btn => btn.type === 'quick_reply')
+        // With quick_reply buttons, send as interactive message
+        const interactiveButtons = quickReplyButtons
             .slice(0, 3) // Max 3 buttons
             .map((btn, index) => ({
                 type: 'reply',
@@ -210,7 +235,7 @@ export async function sendWhatsAppCustomMessage({
             interactive: {
                 type: 'button',
                 body: {
-                    text: content,
+                    text: finalContent,
                 },
                 action: {
                     buttons: interactiveButtons,

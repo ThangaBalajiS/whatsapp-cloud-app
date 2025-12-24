@@ -412,6 +412,9 @@ export default function CustomMessagesClient({
 
                             <div className="form-row">
                                 <label>Reply Buttons (optional)</label>
+                                <p className="muted small-text" style={{ marginTop: '0.25rem', marginBottom: '0.5rem' }}>
+                                    💡 Quick Reply buttons appear as interactive buttons. URL and Call buttons will appear as clickable links in the message (WhatsApp API limitation).
+                                </p>
                                 <div className="buttons-list">
                                     {messageForm.buttons.map((btn, i) => (
                                         <div key={i} className="button-editor">
