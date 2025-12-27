@@ -348,11 +348,16 @@ async function processFlowForMessage({
       console.log(`[Flow] Sent custom message "${actualName}" to ${contact.waId}`);
 
       // Track last sent template for function processing
-      await Contact.findByIdAndUpdate(contact._id, {
-        lastSentTemplate: customMessageName, // Keep the custom: prefix for tracking
-        lastSentFlowId: flowId || null,
-      });
+      const updateResult = await Contact.findByIdAndUpdate(
+        contact._id, 
+        {
+          lastSentTemplate: customMessageName, // Keep the custom: prefix for tracking
+          lastSentFlowId: flowId || null,
+        },
+        { new: true } // Return the updated document
+      );
       console.log(`[Flow] Updated contact tracking - lastSentTemplate: "${customMessageName}", flowId: "${flowId}"`);
+      console.log(`[Flow Debug] Verification - updated doc has lastSentTemplate: "${updateResult?.lastSentTemplate}", lastSentFlowId: "${updateResult?.lastSentFlowId}"`);
 
       // Save outgoing message
       await Message.create({
@@ -485,19 +490,32 @@ async function processFlowForMessage({
               } else {
                 await sendTemplateAndTrack(nextTemplate, flow._id.toString());
               }
+              // Note: sendCustomMessageAndTrack/sendTemplateAndTrack already set the new tracking
+              // for the nextTemplate, so we don't clear it here
+            } else {
+              // No nextTemplate - this is a terminal function, clear tracking
+              await Contact.findByIdAndUpdate(contact._id, {
+                lastSentTemplate: '',
+                lastSentFlowId: null,
+              });
             }
           } catch (err: any) {
             console.error(`[Flow] Function execution error:`, err.message);
+            // Clear tracking on error
+            await Contact.findByIdAndUpdate(contact._id, {
+              lastSentTemplate: '',
+              lastSentFlowId: null,
+            });
           }
         } else {
           console.warn(`[Flow] Function "${functionConnection.target}" not found`);
+          // Clear tracking if function not found
+          await Contact.findByIdAndUpdate(contact._id, {
+            lastSentTemplate: '',
+            lastSentFlowId: null,
+          });
         }
 
-        // Clear tracking after processing
-        await Contact.findByIdAndUpdate(contact._id, {
-          lastSentTemplate: '',
-          lastSentFlowId: null,
-        });
         return;
       }
     }
