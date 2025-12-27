@@ -2666,14 +2666,22 @@ button:disabled {
 }
 
 .react-flow__controls-button {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text);
   fill: var(--text);
 }
 
+button.react-flow__controls-button svg {
+  fill: rgba(109, 109, 109, 0.7);
+}
+
 .react-flow__controls-button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(91, 157, 255, 0.2);
+}
+
+.react-flow__controls-button:hover svg {
+  fill: rgba(109, 109, 109, 0.7);
 }
 
 /* Flows Grid (List View) */
