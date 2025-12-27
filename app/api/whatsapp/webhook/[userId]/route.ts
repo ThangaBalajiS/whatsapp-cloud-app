@@ -407,12 +407,26 @@ async function processFlowForMessage({
     console.log(`[Flow Debug] Found flow:`, flow ? flow.name : 'null');
 
     if (flow) {
+      // Debug: log all connections
+      console.log(`[Flow Debug] All connections in flow:`, JSON.stringify(flow.connections.map((c: any) => ({
+        sourceTemplate: c.sourceTemplate,
+        button: c.button,
+        targetType: c.targetType,
+        target: c.target,
+        nextTemplate: c.nextTemplate,
+      })), null, 2));
+
       // Find a function connection for the last sent template
       const functionConnection = flow.connections.find(
         (conn: any) => conn.sourceTemplate === freshContact.lastSentTemplate &&
           conn.targetType === 'function' &&
           !conn.button
       );
+
+      console.log(`[Flow Debug] Looking for sourceTemplate: "${freshContact.lastSentTemplate}", found functionConnection:`, functionConnection ? {
+        target: functionConnection.target,
+        nextTemplate: functionConnection.nextTemplate,
+      } : 'null');
 
       if (functionConnection) {
         console.log(`[Flow] Processing function "${functionConnection.target}" with input: "${messageText}"`);
