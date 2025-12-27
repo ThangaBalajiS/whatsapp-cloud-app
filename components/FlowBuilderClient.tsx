@@ -173,6 +173,21 @@ export default function FlowBuilderClient({
   const [mappingForm, setMappingForm] = useState<Record<string, string>>({});
   const [newOutputKey, setNewOutputKey] = useState('');
   const [pickerTab, setPickerTab] = useState<'templates' | 'custom'>('templates');
+  
+  // Test Flow Popup State
+  const [showTestFlowModal, setShowTestFlowModal] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{
+    id: string;
+    direction: 'incoming' | 'outgoing';
+    content: string;
+    buttons?: { text: string; payload: string }[];
+    timestamp: Date;
+  }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [simulationState, setSimulationState] = useState<{
+    lastSentTemplate: string;
+    connections: FlowConnection[];
+  }>({ lastSentTemplate: '', connections: [] });
   const [pendingConnection, setPendingConnection] = useState<{
     sourceNode: string;
     sourceHandle: string;
@@ -966,6 +981,204 @@ export default function FlowBuilderClient({
     setPendingConnection(null);
   };
 
+  // ==================== TEST FLOW SIMULATION ====================
+  const getMessageContent = (templateName: string): { content: string; buttons: { text: string; payload: string }[] } => {
+    if (templateName.startsWith('custom:')) {
+      const customMsgName = templateName.replace('custom:', '');
+      const customMsg = customMessages.find((m) => m.name === customMsgName);
+      if (customMsg) {
+        return {
+          content: customMsg.content,
+          buttons: customMsg.buttons.map((btn) => ({ text: btn.text, payload: btn.payload || btn.text })),
+        };
+      }
+      return { content: `[Custom Message: ${customMsgName}]`, buttons: [] };
+    }
+
+    const template = templates.find((t) => t.name === templateName);
+    if (template) {
+      const bodyComponent = template.components?.find((c) => c.type === 'BODY');
+      const buttonsComponent = template.components?.find((c) => c.type === 'BUTTONS');
+      const content = bodyComponent?.text || `[Template: ${templateName}]`;
+      const buttons = (buttonsComponent?.buttons || [])
+        .filter((btn) => btn.type === 'QUICK_REPLY')
+        .map((btn) => ({ text: btn.text || '', payload: btn.text || '' }));
+      return { content, buttons };
+    }
+
+    return { content: `[Template: ${templateName}]`, buttons: [] };
+  };
+
+  const addBotMessage = (templateName: string) => {
+    const { content, buttons } = getMessageContent(templateName);
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `bot-${Date.now()}`,
+        direction: 'outgoing' as const,
+        content,
+        buttons: buttons.length > 0 ? buttons : undefined,
+        timestamp: new Date(),
+      },
+    ]);
+    setSimulationState((prev) => ({ ...prev, lastSentTemplate: templateName }));
+  };
+
+  const matchesTrigger = (messageText: string): boolean => {
+    if (!trigger || trigger.matchType === 'any') {
+      return true;
+    }
+
+    const text = messageText.toLowerCase();
+    const matchText = (trigger.matchText || '').toLowerCase();
+
+    switch (trigger.matchType) {
+      case 'includes':
+        return text.includes(matchText);
+      case 'starts_with':
+        return text.startsWith(matchText);
+      case 'exact':
+        return text === matchText;
+      default:
+        return true;
+    }
+  };
+
+  const simulateMessage = (messageText: string, isButtonReply: boolean = false) => {
+    // Add user message
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        direction: 'incoming' as const,
+        content: messageText,
+        timestamp: new Date(),
+      },
+    ]);
+
+    // Get current connections from the flow
+    const currentConnections = extractConnectionsFromEdges();
+
+    // Handle button reply
+    if (isButtonReply) {
+      const buttonConnection = currentConnections.find(
+        (conn) => conn.button === messageText
+      );
+
+      if (buttonConnection) {
+        setTimeout(() => {
+          if (buttonConnection.targetType === 'template' || buttonConnection.targetType === 'custom_message') {
+            addBotMessage(buttonConnection.target);
+          } else if (buttonConnection.targetType === 'function') {
+            // Simulate function execution
+            const fn = functions.find((f) => f.name === buttonConnection.target);
+            if (fn) {
+              // Show function execution message
+              setChatMessages((prev) => [
+                ...prev,
+                {
+                  id: `func-${Date.now()}`,
+                  direction: 'outgoing' as const,
+                  content: `⚡ Executing function: ${buttonConnection.target}`,
+                  timestamp: new Date(),
+                },
+              ]);
+              // If there's a next template, send it
+              if (buttonConnection.nextTemplate) {
+                setTimeout(() => {
+                  addBotMessage(buttonConnection.nextTemplate!);
+                }, 500);
+              }
+            }
+          }
+        }, 300);
+        return;
+      }
+    }
+
+    // Check for function connection from last sent template
+    if (simulationState.lastSentTemplate) {
+      const functionConnection = currentConnections.find(
+        (conn) =>
+          conn.sourceTemplate === simulationState.lastSentTemplate &&
+          conn.targetType === 'function' &&
+          !conn.button
+      );
+
+      if (functionConnection) {
+        // Simulate function execution
+        const fn = functions.find((f) => f.name === functionConnection.target);
+        if (fn) {
+          setTimeout(() => {
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `func-${Date.now()}`,
+                direction: 'outgoing' as const,
+                content: `⚡ Executing function: ${functionConnection.target}\nInput: "${messageText}"`,
+                timestamp: new Date(),
+              },
+            ]);
+
+            // If there's a next template, send it with simulated replacements
+            if (functionConnection.nextTemplate) {
+              setTimeout(() => {
+                let { content, buttons } = getMessageContent(functionConnection.nextTemplate!);
+                
+                // Show simulated replacement note
+                const placeholderMatches = content.match(/\{\{[^}]+\}\}/g);
+                if (placeholderMatches && placeholderMatches.length > 0) {
+                  content = content.replace(/\{\{([^}]+)\}\}/g, '[$1]');
+                  content += '\n\n(Note: Placeholders would be replaced with function output)';
+                }
+
+                setChatMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `bot-${Date.now()}`,
+                    direction: 'outgoing' as const,
+                    content,
+                    buttons: buttons.length > 0 ? buttons : undefined,
+                    timestamp: new Date(),
+                  },
+                ]);
+                setSimulationState((prev) => ({ ...prev, lastSentTemplate: functionConnection.nextTemplate! }));
+              }, 500);
+            }
+          }, 300);
+          return;
+        }
+      }
+    }
+
+    // Check trigger for first template
+    if (matchesTrigger(messageText) && firstTemplate) {
+      setTimeout(() => {
+        addBotMessage(firstTemplate);
+      }, 300);
+    }
+  };
+
+  const handleChatSend = () => {
+    if (!chatInput.trim()) return;
+    simulateMessage(chatInput.trim());
+    setChatInput('');
+  };
+
+  const handleButtonClick = (buttonText: string) => {
+    simulateMessage(buttonText, true);
+  };
+
+  const resetTestFlow = () => {
+    setChatMessages([]);
+    setSimulationState({ lastSentTemplate: '', connections: [] });
+  };
+
+  const openTestFlowModal = () => {
+    resetTestFlow();
+    setShowTestFlowModal(true);
+  };
+
   // ==================== RENDER MODALS ====================
   const renderTemplateModal = () => (
     <div className="modal-overlay" onClick={() => { setShowTemplateModal(false); setPendingConnection(null); }}>
@@ -1287,6 +1500,77 @@ export default function FlowBuilderClient({
     );
   };
 
+  const renderTestFlowModal = () => (
+    <div className="modal-overlay" onClick={() => setShowTestFlowModal(false)}>
+      <div className="modal-content test-flow-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>🧪 Test Flow</h2>
+          <button className="modal-close" onClick={() => setShowTestFlowModal(false)}>×</button>
+        </div>
+        <div className="test-flow-info">
+          <span className="flow-info-badge">
+            Trigger: {trigger.matchType === 'any' ? 'Any message' : `${trigger.matchType}: "${trigger.matchText}"`}
+          </span>
+          {firstTemplate && (
+            <span className="flow-info-badge">
+              First: {firstTemplate.startsWith('custom:') ? `💬 ${firstTemplate.replace('custom:', '')}` : `📋 ${firstTemplate}`}
+            </span>
+          )}
+        </div>
+        <div className="test-chat-area">
+          {chatMessages.length === 0 ? (
+            <div className="test-chat-empty">
+              <div className="test-chat-empty-icon">💬</div>
+              <p>Send a message to test your flow</p>
+              <span className="muted">Messages you send will trigger the flow logic</span>
+            </div>
+          ) : (
+            <div className="test-chat-messages">
+              {chatMessages.map((msg) => (
+                <div key={msg.id} className={`test-chat-message ${msg.direction}`}>
+                  <div className="test-chat-bubble">
+                    <div className="test-chat-content">{msg.content}</div>
+                    {msg.buttons && msg.buttons.length > 0 && (
+                      <div className="test-chat-buttons">
+                        {msg.buttons.map((btn, idx) => (
+                          <button
+                            key={idx}
+                            className="test-chat-btn"
+                            onClick={() => handleButtonClick(btn.text)}
+                          >
+                            {btn.text}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="test-chat-time">
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="test-chat-input-area">
+          <button className="btn-secondary small" onClick={resetTestFlow} title="Reset conversation">
+            🔄
+          </button>
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleChatSend()}
+            placeholder="Type a message..."
+          />
+          <button className="btn-primary" onClick={handleChatSend}>
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // ==================== NO WHATSAPP ACCOUNT ====================
   if (!hasWhatsAppAccount) {
     return (
@@ -1394,6 +1678,9 @@ export default function FlowBuilderClient({
               />
             </div>
             <div className="header-actions">
+              <button className="btn-test-flow" onClick={openTestFlowModal}>
+                🧪 Test Flow
+              </button>
               <button className="btn-secondary" onClick={cancelBuilder}>
                 Cancel
               </button>
@@ -1428,6 +1715,7 @@ export default function FlowBuilderClient({
       {showFunctionModal && renderFunctionModal()}
       {showTriggerModal && renderTriggerModal()}
       {showMappingModal && renderMappingModal()}
+      {showTestFlowModal && renderTestFlowModal()}
     </main>
   );
 }
