@@ -342,6 +342,8 @@ async function processFlowForMessage({
       recipientPhone: contact.waId,
       content: content,
       buttons: customMsg.buttons,
+      // Generate flow token for WhatsApp Flows context: userId:waId:encodedName
+      flowToken: `${userId}:${contact.waId}:${encodeURIComponent(contact.name || contact.waId)}`,
     });
 
     if (result.success) {

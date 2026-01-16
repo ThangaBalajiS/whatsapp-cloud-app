@@ -152,11 +152,13 @@ export async function sendWhatsAppText(options: {
 }
 
 export type CustomMessageButton = {
-    type: 'quick_reply' | 'url' | 'call';
+    type: 'quick_reply' | 'url' | 'call' | 'flow';
     text: string;
     payload?: string;
     url?: string;
     phone?: string;
+    flowId?: string;
+    flowAction?: 'navigate' | 'data_exchange';
 };
 
 export type SendCustomMessageOptions = {
@@ -165,6 +167,7 @@ export type SendCustomMessageOptions = {
     recipientPhone: string;
     content: string;
     buttons?: CustomMessageButton[];
+    flowToken?: string; // Optional token to pass to WhatsApp Flow for context
 };
 
 /**
@@ -178,6 +181,7 @@ export async function sendWhatsAppCustomMessage({
     recipientPhone,
     content,
     buttons = [],
+    flowToken,
 }: SendCustomMessageOptions): Promise<SendTemplateResult> {
     try {
         const decryptedToken = decrypt(accessToken);
@@ -186,6 +190,7 @@ export async function sendWhatsAppCustomMessage({
         const quickReplyButtons = buttons.filter(btn => btn.type === 'quick_reply');
         const urlButtons = buttons.filter(btn => btn.type === 'url' && btn.url);
         const callButtons = buttons.filter(btn => btn.type === 'call' && btn.phone);
+        const flowButtons = buttons.filter(btn => btn.type === 'flow' && btn.flowId);
 
         // Build the message content with URL and Call buttons appended
         let finalContent = content;
@@ -204,6 +209,61 @@ export async function sendWhatsAppCustomMessage({
                 .map(btn => `📞 ${btn.text}: ${btn.phone}`)
                 .join('\n');
             finalContent += '\n\n' + callLinks;
+        }
+
+        // If there's a flow button, send as interactive flow message
+        if (flowButtons.length > 0) {
+            const flowBtn = flowButtons[0]; // Only one flow button allowed per message
+            
+            const payload = {
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: recipientPhone,
+                type: 'interactive',
+                interactive: {
+                    type: 'flow',
+                    body: {
+                        text: finalContent,
+                    },
+                    action: {
+                        name: 'flow',
+                        parameters: {
+                            flow_message_version: '3',
+                            flow_id: flowBtn.flowId,
+                            flow_cta: flowBtn.text.substring(0, 20), // Max 20 chars for CTA
+                            flow_action: flowBtn.flowAction || 'navigate',
+                            ...(flowToken && { flow_token: flowToken }),
+                        },
+                    },
+                },
+            };
+
+            const response = await fetch(
+                `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`,
+                {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${decryptedToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error('WhatsApp flow message send error:', data);
+                return {
+                    success: false,
+                    error: data.error?.message || 'Failed to send flow message',
+                };
+            }
+
+            return {
+                success: true,
+                messageId: data.messages?.[0]?.id,
+            };
         }
 
         // If no quick_reply buttons, send as plain text (with URL/Call info appended)

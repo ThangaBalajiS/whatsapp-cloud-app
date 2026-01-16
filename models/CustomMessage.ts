@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export type ButtonType = 'quick_reply' | 'url' | 'call';
+export type ButtonType = 'quick_reply' | 'url' | 'call' | 'flow';
 
 export type CustomMessageButton = {
     type: ButtonType;
@@ -8,6 +8,8 @@ export type CustomMessageButton = {
     payload?: string; // For quick_reply
     url?: string;     // For url type
     phone?: string;   // For call type
+    flowId?: string;  // For flow type - WhatsApp Flow ID
+    flowAction?: 'navigate' | 'data_exchange'; // Flow action type
 };
 
 const ButtonSchema = new mongoose.Schema<CustomMessageButton>(
@@ -15,12 +17,14 @@ const ButtonSchema = new mongoose.Schema<CustomMessageButton>(
         type: {
             type: String,
             required: true,
-            enum: ['quick_reply', 'url', 'call'],
+            enum: ['quick_reply', 'url', 'call', 'flow'],
         },
         text: { type: String, required: true },
         payload: { type: String, default: '' },
         url: { type: String, default: '' },
         phone: { type: String, default: '' },
+        flowId: { type: String, default: '' },
+        flowAction: { type: String, enum: ['navigate', 'data_exchange'], default: 'navigate' },
     },
     { _id: false }
 );

@@ -1,0 +1,231 @@
+{
+  "version": "6.0",
+  "data_api_version": "3.0",
+  "routing_model": {
+    "SELECT_DATE": ["SELECT_TIME"],
+    "SELECT_TIME": ["CONFIRM"],
+    "CONFIRM": ["SUCCESS"]
+  },
+  "screens": [
+    {
+      "id": "SELECT_DATE",
+      "title": "Book Appointment",
+      "terminal": false,
+      "data": {
+        "min_date": {
+          "type": "string",
+          "__example__": "2026-01-15"
+        },
+        "error_message": {
+          "type": "string",
+          "__example__": ""
+        },
+        "has_error": {
+          "type": "boolean",
+          "__example__": false
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "📅 Select a Date"
+          },
+          {
+            "type": "TextBody",
+            "text": "Choose your preferred appointment date"
+          },
+          {
+            "type": "DatePicker",
+            "name": "appointment_date",
+            "label": "Appointment Date",
+            "required": true,
+            "on-select-action": {
+              "name": "data_exchange",
+              "payload": {
+                "appointment_date": "${form.appointment_date}"
+              }
+            }
+          },
+          {
+            "type": "TextCaption",
+            "text": "${data.error_message}",
+            "visible": "${data.has_error}"
+          },
+          {
+            "type": "Footer",
+            "label": "Next",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "appointment_date": "${form.appointment_date}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "SELECT_TIME",
+      "title": "Select Time",
+      "terminal": false,
+      "data": {
+        "selected_date": {
+          "type": "string",
+          "__example__": "2026-01-15"
+        },
+        "slots_header": {
+          "type": "string",
+          "__example__": "Available slots for Sunday, January 15, 2026"
+        },
+        "time_slots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" }
+            }
+          },
+          "__example__": [
+            { "id": "2026-01-15T09:00", "title": "9:00 AM" },
+            { "id": "2026-01-15T09:30", "title": "9:30 AM" }
+          ]
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "⏰ Select a Time"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.slots_header}"
+          },
+          {
+            "type": "Dropdown",
+            "name": "selected_time",
+            "label": "Select Time Slot",
+            "required": true,
+            "data-source": "${data.time_slots}"
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "selected_date": "${data.selected_date}",
+                "selected_time": "${form.selected_time}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "CONFIRM",
+      "title": "Confirm Booking",
+      "terminal": false,
+      "data": {
+        "selected_date": {
+          "type": "string",
+          "__example__": "2026-01-15"
+        },
+        "selected_time": {
+          "type": "string",
+          "__example__": "2026-01-15T09:00"
+        },
+        "date_line": {
+          "type": "string",
+          "__example__": "📅 Date: Wednesday, January 15, 2026"
+        },
+        "time_line": {
+          "type": "string",
+          "__example__": "⏰ Time: 9:00 AM"
+        },
+        "summary": {
+          "type": "string",
+          "__example__": "Appointment on Wednesday, January 15, 2026 at 9:00 AM"
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "✅ Confirm Your Booking"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.summary}"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.date_line}"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.time_line}"
+          },
+          {
+            "type": "Footer",
+            "label": "Confirm Appointment",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {
+                "selected_date": "${data.selected_date}",
+                "selected_time": "${data.selected_time}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "SUCCESS",
+      "title": "Booking Confirmed",
+      "terminal": true,
+      "data": {
+        "appointment_id": {
+          "type": "string",
+          "__example__": "abc123"
+        },
+        "confirmation_message": {
+          "type": "string",
+          "__example__": "Your appointment has been booked!"
+        }
+      },
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "🎉 Booking Confirmed!"
+          },
+          {
+            "type": "TextBody",
+            "text": "${data.confirmation_message}"
+          },
+          {
+            "type": "TextCaption",
+            "text": "Booking ID: ${data.appointment_id}"
+          },
+          {
+            "type": "Footer",
+            "label": "Done",
+            "on-click-action": {
+              "name": "complete",
+              "payload": {
+                "appointment_id": "${data.appointment_id}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { DashboardSidebar } from './DashboardSidebar';
 
-type ButtonType = 'quick_reply' | 'url' | 'call';
+type ButtonType = 'quick_reply' | 'url' | 'call' | 'flow';
 
 type MessageButton = {
     type: ButtonType;
@@ -12,6 +12,8 @@ type MessageButton = {
     payload?: string;
     url?: string;
     phone?: string;
+    flowId?: string;
+    flowAction?: 'navigate' | 'data_exchange';
 };
 
 type CustomMessage = {
@@ -134,6 +136,10 @@ export default function CustomMessagesClient({
                 setError('Call buttons require a phone number.');
                 return;
             }
+            if (btn.type === 'flow' && !btn.flowId?.trim()) {
+                setError('Flow buttons require a Flow ID.');
+                return;
+            }
         }
 
         setSaving(true);
@@ -239,6 +245,7 @@ export default function CustomMessagesClient({
             case 'quick_reply': return 'Quick Reply';
             case 'url': return 'URL';
             case 'call': return 'Call';
+            case 'flow': return 'Flow';
         }
     };
 
@@ -343,8 +350,8 @@ export default function CustomMessagesClient({
                                         {msg.buttons && msg.buttons.length > 0 && (
                                             <div className="custom-message-buttons">
                                                 {msg.buttons.map((btn, i) => (
-                                                    <span key={i} className="button-tag">
-                                                        {btn.type === 'quick_reply' ? '↩' : btn.type === 'url' ? '🔗' : '📞'} {btn.text}
+                                                <span key={i} className="button-tag">
+                                                        {btn.type === 'quick_reply' ? '↩' : btn.type === 'url' ? '🔗' : btn.type === 'call' ? '📞' : '🔄'} {btn.text}
                                                     </span>
                                                 ))}
                                             </div>
@@ -413,7 +420,7 @@ export default function CustomMessagesClient({
                             <div className="form-row">
                                 <label>Reply Buttons (optional)</label>
                                 <p className="muted small-text" style={{ marginTop: '0.25rem', marginBottom: '0.5rem' }}>
-                                    💡 Quick Reply buttons appear as interactive buttons. URL and Call buttons will appear as clickable links in the message (WhatsApp API limitation).
+                                    💡 Quick Reply buttons appear as interactive buttons. URL and Call buttons will appear as clickable links. Flow buttons trigger a WhatsApp Flow.
                                 </p>
                                 <div className="buttons-list">
                                     {messageForm.buttons.map((btn, i) => (
@@ -425,6 +432,7 @@ export default function CustomMessagesClient({
                                                 <option value="quick_reply">Quick Reply</option>
                                                 <option value="url">URL Button</option>
                                                 <option value="call">Call Button</option>
+                                                <option value="flow">Flow Button</option>
                                             </select>
                                             <input
                                                 value={btn.text}
@@ -451,6 +459,23 @@ export default function CustomMessagesClient({
                                                     onChange={e => updateButton(i, { phone: e.target.value })}
                                                     placeholder="+1234567890"
                                                 />
+                                            )}
+                                            {btn.type === 'flow' && (
+                                                <>
+                                                    <input
+                                                        value={btn.flowId || ''}
+                                                        onChange={e => updateButton(i, { flowId: e.target.value })}
+                                                        placeholder="Flow ID (e.g., 123456789)"
+                                                    />
+                                                    <select
+                                                        value={btn.flowAction || 'navigate'}
+                                                        onChange={e => updateButton(i, { flowAction: e.target.value as 'navigate' | 'data_exchange' })}
+                                                        style={{ minWidth: '120px' }}
+                                                    >
+                                                        <option value="navigate">Navigate</option>
+                                                        <option value="data_exchange">Data Exchange</option>
+                                                    </select>
+                                                </>
                                             )}
                                             <button
                                                 type="button"
@@ -484,6 +509,7 @@ export default function CustomMessagesClient({
                                                     {btn.type === 'quick_reply' && '↩'}
                                                     {btn.type === 'url' && '🔗'}
                                                     {btn.type === 'call' && '📞'}
+                                                    {btn.type === 'flow' && '🔄'}
                                                     {' '}{btn.text || 'Button'}
                                                 </div>
                                             ))}
