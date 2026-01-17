@@ -38,7 +38,7 @@ export default function AppointmentsClient({ userEmail, userId, hasWhatsAppAccou
     contactWaId: '',
     date: '',
     time: '',
-    duration: 30,
+    duration: 120, // 2 hours default
     notes: '',
   });
 
@@ -73,6 +73,7 @@ export default function AppointmentsClient({ userEmail, userId, hasWhatsAppAccou
       month: 'short',
       day: 'numeric',
       year: 'numeric',
+      timeZone: 'Asia/Kolkata', // Always display in IST
     });
   };
 
@@ -82,6 +83,7 @@ export default function AppointmentsClient({ userEmail, userId, hasWhatsAppAccou
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZone: 'Asia/Kolkata', // Always display in IST
     });
   };
 

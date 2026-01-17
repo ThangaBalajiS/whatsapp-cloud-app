@@ -71,6 +71,39 @@ export async function GET(request: Request) {
   }
 }
 
+// IST offset in milliseconds (+05:30 = 5.5 hours)
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// Convert a local IST datetime string to UTC Date
+// Handles both ISO format and date+time components
+function parseIstToUtc(dateString: string): Date {
+  // If the date string already has timezone info, parse it directly
+  if (dateString.includes('+') || dateString.includes('Z')) {
+    // Client sent ISO string with timezone - but since browser is in IST,
+    // the ISO string represents the IST time the user selected
+    // We need to interpret the local time part as IST
+    const localDateTime = dateString.replace(/[TZ]/g, ' ').split('+')[0].trim();
+    const [datePart, timePart] = localDateTime.split(' ');
+    const time = timePart?.slice(0, 5) || '09:00';
+    // Create with explicit IST offset
+    return new Date(`${datePart}T${time}:00.000+05:30`);
+  }
+  
+  // Plain ISO-ish string without timezone - treat as IST
+  // Format: "2026-01-17T09:30:00" or "2026-01-17T09:30"
+  const cleanDate = dateString.includes('T') 
+    ? dateString.slice(0, 16) // YYYY-MM-DDTHH:MM
+    : dateString;
+  
+  if (cleanDate.includes('T')) {
+    const [datePart, timePart] = cleanDate.split('T');
+    return new Date(`${datePart}T${timePart}:00.000+05:30`);
+  }
+  
+  // Just a date - default to 9 AM IST
+  return new Date(`${cleanDate}T09:00:00.000+05:30`);
+}
+
 // POST - Create appointment manually
 export async function POST(request: Request) {
   const userId = await getUserId();
@@ -91,13 +124,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Parse the date as IST and convert to UTC for storage
+    const appointmentDateUtc = parseIstToUtc(date);
+
     const appointment = await Appointment.create({
       userId,
       contactWaId,
       customerName,
       customerPhone: customerPhone || '',
-      date: new Date(date),
-      duration: duration || 30,
+      date: appointmentDateUtc,
+      duration: duration || 120, // 2 hours default
       notes: notes || '',
       status: 'scheduled',
     });

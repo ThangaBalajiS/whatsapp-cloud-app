@@ -116,30 +116,53 @@ interface FlowResponse {
   data?: Record<string, unknown>;
 }
 
+// IST offset in milliseconds (+05:30 = 5.5 hours)
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// Convert a local IST time string to a UTC Date object
+// Input: date string like '2026-01-17' and time string like '09:30'
+// Output: Date object representing that IST time in UTC
+function istToUtc(dateStr: string, timeStr: string): Date {
+  // Create a date string in ISO format and treat it as IST
+  const isoString = `${dateStr}T${timeStr}:00.000+05:30`;
+  return new Date(isoString);
+}
+
+// Convert a UTC Date to IST hours and minutes for display/comparison
+function utcToIstComponents(utcDate: Date): { hours: number; minutes: number; dateStr: string } {
+  const istDate = new Date(utcDate.getTime() + IST_OFFSET_MS);
+  return {
+    hours: istDate.getUTCHours(),
+    minutes: istDate.getUTCMinutes(),
+    dateStr: istDate.toISOString().slice(0, 10),
+  };
+}
+
 // Generate available time slots for a given date, excluding already booked slots
 async function getAvailableTimeSlots(
   date: string,
   userId?: mongoose.Types.ObjectId
 ): Promise<{ id: string; title: string }[]> {
-  // Business hours: 9 AM to 5 PM, 30-minute slots
+  // Business hours: 9 AM to 5 PM IST, 2-hour slots
   const allSlots = [];
-  for (let hour = 9; hour < 17; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      allSlots.push({
-        id: `${date}T${timeStr}`,
-        title: `${hour > 12 ? hour - 12 : hour}:${minute.toString().padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`,
-        dateTime: new Date(`${date}T${timeStr}:00`),
-      });
-    }
+  for (let hour = 9; hour < 17; hour += 2) {
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    // Convert IST slot time to UTC for storage and comparison
+    const utcDateTime = istToUtc(date, timeStr);
+    allSlots.push({
+      id: `${date}T${timeStr}`, // ID stays in IST format for the flow UI
+      title: `${hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
+      utcDateTime, // Store as UTC Date for DB comparison
+    });
   }
 
-  // Fetch existing appointments for this date
-  const startOfDay = new Date(`${date}T00:00:00`);
-  const endOfDay = new Date(`${date}T23:59:59`);
+  // Fetch existing appointments for this date (stored in UTC)
+  // We need to query based on IST day boundaries converted to UTC
+  const startOfDayUtc = istToUtc(date, '00:00');
+  const endOfDayUtc = istToUtc(date, '23:59');
 
   const query: Record<string, unknown> = {
-    date: { $gte: startOfDay, $lte: endOfDay },
+    date: { $gte: startOfDayUtc, $lte: endOfDayUtc },
     status: { $in: ['scheduled', 'confirmed'] }, // Only active appointments block slots
   };
   
@@ -149,28 +172,26 @@ async function getAvailableTimeSlots(
 
   const bookedAppointments = await Appointment.find(query).lean();
 
-  // Create a set of booked time slots (considering duration)
-  const bookedSlots = new Set<string>();
+  // Create a set of booked time slots in UTC (considering duration)
+  const bookedSlots = new Set<number>(); // Store as UTC timestamps for exact comparison
   
   for (const apt of bookedAppointments) {
     const aptDate = new Date(apt.date);
     const duration = apt.duration || 30;
     
-    // Block all slots that overlap with this appointment
-    for (let i = 0; i < duration; i += 30) {
-      const slotTime = new Date(aptDate.getTime() + i * 60 * 1000);
-      const slotKey = slotTime.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
-      bookedSlots.add(slotKey);
+    // Block all slots that overlap with this appointment (2-hour slots)
+    for (let i = 0; i < duration; i += 120) {
+      const slotTime = aptDate.getTime() + i * 60 * 1000;
+      bookedSlots.add(slotTime);
     }
   }
 
   // Filter out booked slots
   const availableSlots = allSlots.filter((slot) => {
-    const slotKey = slot.dateTime.toISOString().slice(0, 16);
-    return !bookedSlots.has(slotKey);
+    return !bookedSlots.has(slot.utcDateTime.getTime());
   });
 
-  console.log(`[Flows] Date ${date}: ${allSlots.length} total slots, ${bookedSlots.size} booked, ${availableSlots.length} available`);
+  console.log(`[Flows] Date ${date} (IST): ${allSlots.length} total slots, ${bookedSlots.size} booked, ${availableSlots.length} available`);
 
   return availableSlots.map(({ id, title }) => ({ id, title }));
 }
@@ -412,31 +433,38 @@ async function handleDataExchangeInternal(
         }
 
         // Create the appointment - use data from flow_token, not from user input
-        const selectedTimeStr = data?.selected_time as string;
-        const selectedDateStr = data?.selected_date as string;
+        const selectedTimeStr = data?.selected_time as string; // Format: '2026-01-17T09:30' (IST)
+        const selectedDateStr = data?.selected_date as string; // Format: '2026-01-17'
         
-        // Parse the date properly
+        // Parse the date properly - treat incoming time as IST and convert to UTC for storage
         let appointmentDate: Date;
         if (selectedTimeStr && selectedTimeStr.includes('T')) {
-          appointmentDate = new Date(selectedTimeStr + ':00');
+          // selected_time is in format 'YYYY-MM-DDTHH:MM' representing IST
+          const [datePart, timePart] = selectedTimeStr.split('T');
+          appointmentDate = istToUtc(datePart, timePart);
         } else if (selectedDateStr) {
-          appointmentDate = new Date(selectedDateStr);
+          // Default to 9 AM IST if no time specified
+          appointmentDate = istToUtc(selectedDateStr, '09:00');
         } else {
           appointmentDate = new Date();
         }
         
-        // Format date and time for confirmation message
-        const formattedDate = appointmentDate.toLocaleDateString('en-US', {
+        // Format date and time for confirmation message (display in IST)
+        // We need to manually format in IST since server may be in UTC
+        const istComponents = utcToIstComponents(appointmentDate);
+        const istDateForDisplay = new Date(appointmentDate.getTime() + IST_OFFSET_MS);
+        const formattedDate = istDateForDisplay.toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
-          day: 'numeric'
+          day: 'numeric',
+          timeZone: 'UTC' // Use UTC since we've already shifted the date
         });
-        const formattedTime = appointmentDate.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
+        const hours = istComponents.hours;
+        const minutes = istComponents.minutes;
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+        const formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
         
         const appointmentData = {
           userId: parsedUserId,
@@ -444,7 +472,7 @@ async function handleDataExchangeInternal(
           customerName: parsedName,
           customerPhone: parsedWaId,
           date: appointmentDate,
-          duration: 30,
+          duration: 120, // 2 hours
           status: 'scheduled' as const,
           flowResponseId: flowToken || '',
           notes: '',
@@ -463,7 +491,7 @@ async function handleDataExchangeInternal(
               const confirmationMessage = `✅ *Appointment Confirmed!*\n\n` +
                 `📅 *Date:* ${formattedDate}\n` +
                 `⏰ *Time:* ${formattedTime}\n` +
-                `⏱️ *Duration:* 30 minutes\n\n` +
+                `⏱️ *Duration:* 2 hours\n\n` +
                 `Thank you for booking with us, ${parsedName}!\n\n` +
                 `📍 *Please share your location* so we can assist you better.\n\n` +
                 `We look forward to seeing you!`;
