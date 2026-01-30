@@ -231,7 +231,7 @@ export async function sendWhatsAppCustomMessage({
                             flow_message_version: '3',
                             flow_id: flowBtn.flowId,
                             flow_cta: flowBtn.text.substring(0, 20), // Max 20 chars for CTA
-                            flow_action: flowBtn.flowAction || 'navigate',
+                            flow_action: flowBtn.flowAction || 'data_exchange',
                             ...(flowToken && { flow_token: flowToken }),
                         },
                     },

@@ -2,19 +2,56 @@
   "version": "6.0",
   "data_api_version": "3.0",
   "routing_model": {
+    "WELCOME": ["SELECT_DATE"],
     "SELECT_DATE": ["SELECT_TIME"],
     "SELECT_TIME": ["CONFIRM"],
     "CONFIRM": ["SUCCESS"]
   },
   "screens": [
     {
+      "id": "WELCOME",
+      "title": "Book Appointment",
+      "terminal": false,
+      "layout": {
+        "type": "SingleColumnLayout",
+        "children": [
+          {
+            "type": "TextHeading",
+            "text": "📅 Book Your Appointment"
+          },
+          {
+            "type": "TextBody",
+            "text": "We'll help you find the perfect time slot. Tap Continue to see available dates."
+          },
+          {
+            "type": "Footer",
+            "label": "Continue",
+            "on-click-action": {
+              "name": "data_exchange",
+              "payload": {}
+            }
+          }
+        ]
+      }
+    },
+    {
       "id": "SELECT_DATE",
       "title": "Book Appointment",
       "terminal": false,
       "data": {
-        "min_date": {
-          "type": "string",
-          "__example__": "2026-01-15"
+        "available_dates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" }
+            }
+          },
+          "__example__": [
+            { "id": "2026-01-30", "title": "Thu, Jan 30" },
+            { "id": "2026-01-31", "title": "Fri, Jan 31" }
+          ]
         },
         "error_message": {
           "type": "string",
@@ -37,16 +74,11 @@
             "text": "Choose your preferred appointment date"
           },
           {
-            "type": "DatePicker",
+            "type": "RadioButtonsGroup",
             "name": "appointment_date",
-            "label": "Appointment Date",
+            "label": "Available Dates",
             "required": true,
-            "on-select-action": {
-              "name": "data_exchange",
-              "payload": {
-                "appointment_date": "${form.appointment_date}"
-              }
-            }
+            "data-source": "${data.available_dates}"
           },
           {
             "type": "TextCaption",

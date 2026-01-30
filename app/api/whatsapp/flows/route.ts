@@ -196,6 +196,30 @@ async function getAvailableTimeSlots(
   return availableSlots.map(({ id, title }) => ({ id, title }));
 }
 
+// Generate the next 7 days as date options for the flow
+function getNext7Days(): { id: string; title: string }[] {
+  const dates = [];
+  const today = new Date();
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+    
+    const id = date.toISOString().split('T')[0]; // Format: 2026-01-30
+    const title = date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    }); // Format: Thu, Jan 30
+
+    
+    dates.push({ id, title });
+  }
+  console.log(dates)
+  
+  return dates;
+}
+
 // POST - Handle WhatsApp Flow requests
 export async function POST(request: Request) {
   let aesKeyForResponse: Buffer | null = null;
@@ -253,12 +277,12 @@ export async function POST(request: Request) {
         break;
 
       case 'INIT':
-        // Flow initialization - return first screen data
+        // Flow initialization - return first screen data with next 7 days
         responsePayload = {
           version: '3.0',
           screen: 'SELECT_DATE',
           data: {
-            min_date: new Date().toISOString().split('T')[0],
+            available_dates: getNext7Days(),
             error_message: '',
             has_error: false,
           },
@@ -315,6 +339,18 @@ async function handleDataExchangeInternal(
   console.log('[Flows] Data exchange - screen:', screen, 'data:', data);
 
   switch (screen) {
+    case 'WELCOME':
+      // User clicked Continue - provide available dates
+      return {
+        version: '3.0',
+        screen: 'SELECT_DATE',
+        data: {
+          available_dates: getNext7Days(),
+          error_message: '',
+          has_error: false,
+        },
+      };
+
     case 'SELECT_DATE':
       // User selected a date, provide time slots
       await dbConnect();
@@ -326,7 +362,7 @@ async function handleDataExchangeInternal(
           version: '3.0',
           screen: 'SELECT_DATE',
           data: {
-            min_date: new Date().toISOString().split('T')[0],
+            available_dates: getNext7Days(),
             error_message: 'No available slots for this date. Please select another date.',
             has_error: true,
           },
@@ -541,7 +577,7 @@ async function handleDataExchangeInternal(
         version: '3.0',
         screen: 'SELECT_DATE',
         data: {
-          min_date: new Date().toISOString().split('T')[0],
+          available_dates: getNext7Days(),
           error_message: '',
           has_error: false,
         },
