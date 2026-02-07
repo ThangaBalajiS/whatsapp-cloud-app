@@ -143,17 +143,20 @@ async function getAvailableTimeSlots(
   date: string,
   userId?: mongoose.Types.ObjectId
 ): Promise<{ id: string; title: string }[]> {
-  // Business hours: 9 AM to 5 PM IST, 2-hour slots
+  // Business hours: 9 AM to 5 PM IST, 30-minute slots
   const allSlots = [];
-  for (let hour = 9; hour < 17; hour += 2) {
-    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-    // Convert IST slot time to UTC for storage and comparison
-    const utcDateTime = istToUtc(date, timeStr);
-    allSlots.push({
-      id: `${date}T${timeStr}`, // ID stays in IST format for the flow UI
-      title: `${hour > 12 ? hour - 12 : hour}:00 ${hour >= 12 ? 'PM' : 'AM'}`,
-      utcDateTime, // Store as UTC Date for DB comparison
-    });
+  for (let hour = 9; hour < 17; hour++) {
+    for (let minute = 0; minute < 60; minute += 30) {
+      const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+      // Convert IST slot time to UTC for storage and comparison
+      const utcDateTime = istToUtc(date, timeStr);
+      const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+      allSlots.push({
+        id: `${date}T${timeStr}`, // ID stays in IST format for the flow UI
+        title: `${displayHour}:${minute.toString().padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`,
+        utcDateTime, // Store as UTC Date for DB comparison
+      });
+    }
   }
 
   // Fetch existing appointments for this date (stored in UTC)
@@ -179,43 +182,78 @@ async function getAvailableTimeSlots(
     const aptDate = new Date(apt.date);
     const duration = apt.duration || 30;
     
-    // Block all slots that overlap with this appointment (2-hour slots)
-    for (let i = 0; i < duration; i += 120) {
+    // Block all slots that overlap with this appointment (30-minute slots)
+    for (let i = 0; i < duration; i += 30) {
       const slotTime = aptDate.getTime() + i * 60 * 1000;
       bookedSlots.add(slotTime);
     }
   }
 
-  // Filter out booked slots
+  // Get current time in IST for filtering past slots
+  const nowUtc = new Date();
+  const nowIst = new Date(nowUtc.getTime() + IST_OFFSET_MS);
+  const todayIstStr = `${nowIst.getUTCFullYear()}-${String(nowIst.getUTCMonth() + 1).padStart(2, '0')}-${String(nowIst.getUTCDate()).padStart(2, '0')}`;
+  const currentIstHour = nowIst.getUTCHours();
+  const currentIstMinute = nowIst.getUTCMinutes();
+  
+  // Filter out booked slots AND past slots (for today only)
   const availableSlots = allSlots.filter((slot) => {
-    return !bookedSlots.has(slot.utcDateTime.getTime());
+    // First check if slot is booked
+    if (bookedSlots.has(slot.utcDateTime.getTime())) {
+      return false;
+    }
+    
+    // If selecting for today, filter out past time slots
+    if (date === todayIstStr) {
+      // Parse slot time from the ID (format: YYYY-MM-DDTHH:MM)
+      const slotTimePart = slot.id.split('T')[1];
+      const [slotHour, slotMinute] = slotTimePart.split(':').map(Number);
+      
+      // Compare with current IST time - slot must be in the future
+      if (slotHour < currentIstHour || (slotHour === currentIstHour && slotMinute <= currentIstMinute)) {
+        return false;
+      }
+    }
+    
+    return true;
   });
 
-  console.log(`[Flows] Date ${date} (IST): ${allSlots.length} total slots, ${bookedSlots.size} booked, ${availableSlots.length} available`);
+  console.log(`[Flows] Date ${date} (IST): ${allSlots.length} total slots, ${bookedSlots.size} booked, ${availableSlots.length} available (today: ${date === todayIstStr})`);
 
   return availableSlots.map(({ id, title }) => ({ id, title }));
 }
 
-// Generate the next 7 days as date options for the flow
+// Generate the next 7 days as date options for the flow (IST timezone)
 function getNext7Days(): { id: string; title: string }[] {
   const dates = [];
-  const today = new Date();
+  
+  // Get current time in IST by adding IST offset to UTC
+  const nowUtc = new Date();
+  const nowIst = new Date(nowUtc.getTime() + IST_OFFSET_MS);
+  
+  // Extract the IST date components
+  const todayIstYear = nowIst.getUTCFullYear();
+  const todayIstMonth = nowIst.getUTCMonth();
+  const todayIstDate = nowIst.getUTCDate();
   
   for (let i = 0; i < 7; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
+    // Create a date object for each day in IST
+    const date = new Date(Date.UTC(todayIstYear, todayIstMonth, todayIstDate + i));
     
-    const id = date.toISOString().split('T')[0]; // Format: 2026-01-30
+    // Format the ID as YYYY-MM-DD (IST date)
+    const id = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+    
+    // Format the title for display
     const title = date.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'Asia/Kolkata' // Explicitly use IST
     }); // Format: Thu, Jan 30
-
     
     dates.push({ id, title });
   }
-  console.log(dates)
+  console.log('[Flows] Generated dates (IST):', dates);
   
   return dates;
 }
@@ -508,7 +546,7 @@ async function handleDataExchangeInternal(
           customerName: parsedName,
           customerPhone: parsedWaId,
           date: appointmentDate,
-          duration: 120, // 2 hours
+          duration: 30, // 30 minutes
           status: 'scheduled' as const,
           flowResponseId: flowToken || '',
           notes: '',
@@ -527,7 +565,7 @@ async function handleDataExchangeInternal(
               const confirmationMessage = `✅ *Appointment Confirmed!*\n\n` +
                 `📅 *Date:* ${formattedDate}\n` +
                 `⏰ *Time:* ${formattedTime}\n` +
-                `⏱️ *Duration:* 2 hours\n\n` +
+                `⏱️ *Duration:* 30 minutes\n\n` +
                 `Thank you for booking with us, ${parsedName}!\n\n` +
                 `📍 *Please share your location* so we can assist you better.\n\n` +
                 `We look forward to seeing you!`;

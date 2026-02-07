@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       customerName,
       customerPhone: customerPhone || '',
       date: appointmentDateUtc,
-      duration: duration || 120, // 2 hours default
+      duration: duration || 30, // 30 Mins default
       notes: notes || '',
       status: 'scheduled',
     });
