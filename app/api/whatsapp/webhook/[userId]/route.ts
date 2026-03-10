@@ -5,7 +5,7 @@ import Contact from '../../../../../models/Contact';
 import Message from '../../../../../models/Message';
 import { eventEmitter } from '../../../../../lib/eventEmitter';
 import { findMatchingFlow, resolveConnection } from '../../../../../lib/flowEngine';
-import { sendWhatsAppTemplate, sendWhatsAppCustomMessage } from '../../../../../lib/whatsappSender';
+import { sendWhatsAppTemplate, sendWhatsAppCustomMessage, sendWhatsAppText } from '../../../../../lib/whatsappSender';
 import Flow from '../../../../../models/Flow';
 import Function from '../../../../../models/Function';
 import CustomMessage from '../../../../../models/CustomMessage';
@@ -225,6 +225,7 @@ export async function POST(
               messageText: content,
               buttonPayload,
               isButtonReply,
+              messageType: type,
             });
           } catch (flowError) {
             console.error('Flow processing error:', flowError);
@@ -267,6 +268,7 @@ async function processFlowForMessage({
   messageText,
   buttonPayload,
   isButtonReply,
+  messageType,
 }: {
   userId: string;
   account: any;
@@ -274,6 +276,7 @@ async function processFlowForMessage({
   messageText: string;
   buttonPayload: string | null;
   isButtonReply: boolean;
+  messageType: string;
 }) {
   // Helper to send template and track state
   const sendTemplateAndTrack = async (templateName: string, flowId?: string) => {
@@ -379,6 +382,91 @@ async function processFlowForMessage({
 
     return result;
   };
+
+  // ==== AWAITING LOCATION HANDLING ====
+  // Check if this contact is awaiting a location response (after appointment booking)
+  const freshContactForLocation = await Contact.findById(contact._id);
+  if (freshContactForLocation?.lastSentTemplate === '__awaiting_location__') {
+    // Handle "Main menu" button click — restart the flow
+    if (isButtonReply && (buttonPayload === 'main_menu' || buttonPayload === 'Main menu')) {
+      console.log('[Flow] Main menu clicked — restarting flow');
+      await Contact.findByIdAndUpdate(contact._id, {
+        lastSentTemplate: '',
+        lastSentFlowId: null,
+      });
+      // Trigger the first flow for this user (fall through to flow matching below)
+    } else if (messageType === 'location') {
+      // User sent a location — send thank you
+      console.log('[Flow] Location received while awaiting — sending thank you');
+      const thankYouResult = await sendWhatsAppCustomMessage({
+        phoneNumberId: account.phoneNumberId,
+        accessToken: account.accessToken,
+        recipientPhone: contact.waId,
+        content: '📍 *Thank you for sharing your location!*\n\nWe\'ve noted it for your upcoming visit. See you soon! 😊',
+        buttons: [{
+          type: 'quick_reply',
+          text: 'Main menu',
+          payload: 'main_menu',
+        }],
+      });
+
+      if (thankYouResult.success) {
+        // Save outgoing message
+        await Message.create({
+          userId,
+          contactId: contact._id,
+          waMessageId: thankYouResult.messageId || `loc_thanks_${Date.now()}`,
+          direction: 'outgoing',
+          type: 'text',
+          content: '📍 Thank you for sharing your location! We\'ve noted it for your upcoming visit. See you soon! 😊',
+          timestamp: new Date(),
+          status: 'sent',
+          isRead: true,
+        });
+        console.log('[Flow] Thank you message sent for location');
+      }
+
+      // Clear the awaiting state
+      await Contact.findByIdAndUpdate(contact._id, {
+        lastSentTemplate: '',
+        lastSentFlowId: null,
+      });
+      return;
+    } else {
+      // User sent something other than a location — prompt them
+      console.log('[Flow] Non-location message while awaiting — prompting for location');
+      const promptResult = await sendWhatsAppCustomMessage({
+        phoneNumberId: account.phoneNumberId,
+        accessToken: account.accessToken,
+        recipientPhone: contact.waId,
+        content: '📍 *Please share your location* so we can assist you better for your upcoming visit.',
+        buttons: [{
+          type: 'quick_reply',
+          text: 'Main menu',
+          payload: 'main_menu',
+        }],
+      });
+
+      if (promptResult.success) {
+        // Save outgoing message
+        await Message.create({
+          userId,
+          contactId: contact._id,
+          waMessageId: promptResult.messageId || `loc_prompt_${Date.now()}`,
+          direction: 'outgoing',
+          type: 'text',
+          content: '📍 Please share your location so we can assist you better for your upcoming visit.',
+          timestamp: new Date(),
+          status: 'sent',
+          isRead: true,
+        });
+        console.log('[Flow] Location prompt sent');
+      }
+
+      // Keep the awaiting state so we continue to prompt
+      return;
+    }
+  }
 
   // If it's a button reply, look for the flow connection
   if (isButtonReply && buttonPayload) {

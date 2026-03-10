@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import dbConnect from '../../../../lib/mongodb';
 import Appointment from '../../../../models/Appointment';
 import WhatsAppAccount from '../../../../models/WhatsAppAccount';
+import Contact from '../../../../models/Contact';
 import { sendWhatsAppText } from '../../../../lib/whatsappSender';
 
 /**
@@ -579,6 +580,20 @@ async function handleDataExchangeInternal(
 
               if (result.success) {
                 console.log('[Flows] Confirmation message sent to', parsedWaId);
+                
+                // Mark contact as awaiting location so webhook can handle location responses
+                try {
+                  const contact = await Contact.findOne({ userId: parsedUserId, waId: parsedWaId });
+                  if (contact) {
+                    await Contact.findByIdAndUpdate(contact._id, {
+                      lastSentTemplate: '__awaiting_location__',
+                      lastSentFlowId: null,
+                    });
+                    console.log('[Flows] Contact marked as awaiting location');
+                  }
+                } catch (trackingError) {
+                  console.error('[Flows] Error setting location tracking:', trackingError);
+                }
               } else {
                 console.error('[Flows] Failed to send confirmation:', result.error);
               }
